@@ -1,0 +1,69 @@
+//
+// Protocol buffers definition
+//
+syntax = "proto3";
+package pt.tecnico.bank.grpc;
+
+option java_multiple_files = true;
+
+message PingRequest {
+  string input = 1;
+}
+
+message PingResponse {
+	string output = 1;
+}
+
+message OpenAccountRequest {
+  string public_key = 1;
+  int32 balance = 2;
+}
+
+message OpenAccountResponse {
+  bool ack = 1;
+}
+
+message SendAmountRequest {
+  string source_key = 1;
+  string destination_key = 2;
+  int32 amount = 3;
+}
+
+message SendAmountResponse {
+  bool ack = 1;
+}
+
+message CheckAccountRequest {
+  string public_key = 1;
+}
+
+message CheckAccountResponse {
+  int32 balance = 1;
+  repeated string pendent_transfers = 2;
+}
+
+message ReceiveAmountRequest {
+  string source_key = 1;
+  int32 amount = 2;
+}
+
+message ReceiveAmountResponse {
+  bool ack = 1;
+}
+
+message AuditRequest {
+  string public_key = 1;
+}
+
+message AuditResponse {
+  repeated string transfer_history = 1;
+}
+
+service ServerService {
+  rpc ping(PingRequest) returns (PingResponse);
+  rpc openAccount(OpenAccountRequest) returns (OpenAccountResponse);
+  rpc sendAmount(SendAmountRequest) returns (SendAmountResponse);
+  rpc checkAccount(CheckAccountRequest) returns (CheckAccountResponse);
+  rpc receiveAmount(ReceiveAmountRequest) returns (ReceiveAmountResponse);
+  rpc audit(AuditRequest) returns (AuditResponse);
+}
