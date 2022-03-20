@@ -1,0 +1,3 @@
+alice:70:initialize,-1:initialize,-1;bob,-30
+bob:130:initialize,-1;alice,20:initialize,-1;alice,30
+charlie:200:initialize,-1:initialize,-1

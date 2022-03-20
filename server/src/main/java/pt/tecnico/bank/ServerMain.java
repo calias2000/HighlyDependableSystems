@@ -79,6 +79,28 @@ public class ServerMain {
 				System.out.println("<Press enter to shutdown>");
 				new Scanner(System.in).nextLine();
 
+				try {
+					FileWriter fw = new FileWriter("db.txt");
+					String write = "";
+					for (Client client: clientList){
+						write += client.getPubKey() + ":" + client.getBalance() + ":";
+						for (Transactions trans: client.getPending()){
+							write += trans.getPubkey() + "," + trans.getValue() + ";";
+						}
+						write = write.substring(0, write.length() - 1) + ":";
+						for (Transactions trans: client.getHistory()){
+							write += trans.getPubkey() + "," + trans.getValue() + ";";
+						}
+						write = write.substring(0, write.length() - 1) + "\n";
+					}
+					write = write.substring(0, write.length() - 1);
+					fw.write(write);
+					fw.close();
+
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+
 				server.shutdown();
 			}).start();
 

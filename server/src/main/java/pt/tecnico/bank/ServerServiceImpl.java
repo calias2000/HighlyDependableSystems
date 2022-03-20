@@ -129,7 +129,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             for (int i = 1; i < client.getHistory().size(); i++){
                 if (client.getHistory().get(i).getValue() < 0) {
-                    history.add(client.getHistory().get(i).getValue() + " to " + client.getHistory().get(i).getPubkey());
+                    history.add(Math.abs(client.getHistory().get(i).getValue())+ " to " + client.getHistory().get(i).getPubkey());
                 } else {
                     history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getPubkey());
                 }
