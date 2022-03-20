@@ -14,6 +14,8 @@ message PingResponse {
 	string output = 1;
 }
 
+
+
 message OpenAccountRequest {
   string public_key = 1;
   int32 balance = 2;
@@ -23,15 +25,19 @@ message OpenAccountResponse {
   bool ack = 1;
 }
 
+
+
 message SendAmountRequest {
-  string source_key = 1;
-  string destination_key = 2;
+  string sender_key = 1;
+  string receiver_key = 2;
   int32 amount = 3;
 }
 
 message SendAmountResponse {
   bool ack = 1;
 }
+
+
 
 message CheckAccountRequest {
   string public_key = 1;
@@ -42,14 +48,18 @@ message CheckAccountResponse {
   repeated string pendent_transfers = 2;
 }
 
+
+
 message ReceiveAmountRequest {
-  string source_key = 1;
-  int32 amount = 2;
+  string public_key = 1;
+  int32 transfer = 2;
 }
 
 message ReceiveAmountResponse {
   bool ack = 1;
 }
+
+
 
 message AuditRequest {
   string public_key = 1;
@@ -58,6 +68,8 @@ message AuditRequest {
 message AuditResponse {
   repeated string transfer_history = 1;
 }
+
+
 
 service ServerService {
   rpc ping(PingRequest) returns (PingResponse);

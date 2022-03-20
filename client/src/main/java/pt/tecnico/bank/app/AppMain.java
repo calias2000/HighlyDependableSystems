@@ -22,39 +22,70 @@ public class AppMain {
 
 		while (!quit) {
 			System.out.print("> ");
-			System.out.flush();
 			scanned = scanner.nextLine();
 			tokens = scanned.split(" ");
 			switch (tokens[0]) {
-				case "quit":
-					quit = true;
-					System.out.println("Exiting the app.");
-					frontend.close();
+				case "open-account":
+					if (tokens.length == 3){
+						app.openAccount(tokens[1], Integer.parseInt(tokens[2]));
+					} else {
+						System.out.println("WARNING invalid input.");
+					}
+					break;
+
+				case "check-account":
+					if (tokens.length == 2){
+						app.checkAccount(tokens[1]);
+					} else {
+						System.out.println("WARNING invalid input.");
+					}
+					break;
+
+				case "audit":
+					if (tokens.length == 2){
+						app.audit(tokens[1]);
+					} else {
+						System.out.println("WARNING invalid input.");
+					}
+					break;
+
+				case "send-amount":
+					if (tokens.length == 4){
+						app.sendAmount(tokens[1], tokens[2], Integer.parseInt(tokens[3]));
+					} else {
+						System.out.println("WARNING invalid input.");
+					}
+					break;
+
+				case "receive-amount":
+					if (tokens.length == 3){
+						app.receiveAmount(tokens[1], Integer.parseInt(tokens[2]));
+					} else {
+						System.out.println("WARNING invalid input.");
+					}
 					break;
 
 				case "ping":
 					if (tokens.length == 1){
 						app.ping();
 					} else {
-						System.out.println("ERRO input invalido.");
+						System.out.println("WARNING invalid input.");
 					}
 					break;
 
+				case "quit":
+					quit = true;
+					System.out.println("Exiting the app.");
+					frontend.close();
+					break;
+
 				case "help":
-					System.out.println("Estes sao os comandos disponiveis: \n" +
-							"- balance       (retorna o balance do utilizador) \n" +
-							"- top-up X      (acrescenta X em BIC na conta do utilizador) \n" +
-							"- info X        (mostra informacao sobre a estacao X) \n" +
-							"- scan X        (mostra as X estacoes mais proximas do utilizador) \n" +
-							"- bike-up X     (levanta uma bicicleta da estacao X) \n" +
-							"- bike-down X   (devolve uma bicileta na estacao X) \n" +
-							"- at            (apresenta um link do google maps com as coordenadas do utilizador) \n" +
-							"- tag X Y Z     (cria uma tag nas coordenadas (X,Y) com o nome Z) \n" +
-							"- move X        (move o utilizador para a tag com nome X) \n" +
-							"- move X Y      (move o utilizador para as coordenadas (X,Y)) \n" +
-							"- sys_status    (mostra os servidores que existem e se estao UP ou DOWN) \n" +
-							"- ping          (retorna uma mensagem Pong. do servidor) \n" +
-							"- quit          (fecha a aplicacao)");
+					System.out.println("Available commands: \n" +
+							"- open-account X Y      (opens account with pub key X and balance Y) \n" +
+							"- check-account X       (show balance and incoming pending transactions from account with pub key X) \n" +
+							"- audit X               (shows the history of transactions from the account with pub key X) \n" +
+							"- ping                  (returns Pong from the server) \n" +
+							"- quit                  (closes the app)");
 					break;
 
 				default:

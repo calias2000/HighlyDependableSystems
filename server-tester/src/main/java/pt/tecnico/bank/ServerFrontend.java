@@ -23,7 +23,27 @@ public class ServerFrontend implements Closeable {
     /* ---------- Services ---------- */
 
     public PingResponse ping(PingRequest request) {
-        return stub.ping(PingRequest.newBuilder().setInput(request.getInput()).build());
+        return stub.ping(request);
+    }
+
+    public OpenAccountResponse openAccount(OpenAccountRequest request) {
+        return stub.openAccount(request);
+    }
+
+    public CheckAccountResponse checkAccount(CheckAccountRequest request) {
+        return stub.checkAccount(request);
+    }
+
+    public SendAmountResponse sendAmount(SendAmountRequest request) {
+        return stub.sendAmount(request);
+    }
+
+    public ReceiveAmountResponse receiveAmount(ReceiveAmountRequest request) {
+        return stub.receiveAmount(request);
+    }
+
+    public AuditResponse audit(AuditRequest request) {
+        return stub.audit(request);
     }
 
     @Override
