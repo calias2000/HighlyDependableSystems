@@ -21,16 +21,21 @@ public class App {
     /**
      * Prints to the console the result of a PingRequest.
      */
+    public int lastId() {
+        LastIdRequest request = LastIdRequest.newBuilder().build();
+        return frontend.lastId(request).getLastId() + 1;
+    }
+
 
     public void ping() {
         PingRequest request = PingRequest.newBuilder().setInput("Ping").build();
         System.out.println("\n" + frontend.ping(request).getOutput() + "\n");
     }
 
-    public void openAccount(String pubkey, int balance) {
-        OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(pubkey).setBalance(balance).build();
+    public void openAccount(String pubkey) {
+        OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(pubkey).build();
         if (frontend.openAccount(request).getAck()){
-            System.out.println("\nAccount created successfuly.\n");
+            System.out.println("\nAccount created successfuly with ID: " + lastId() + ".\n");
         }
     }
 

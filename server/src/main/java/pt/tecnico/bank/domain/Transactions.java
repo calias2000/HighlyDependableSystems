@@ -1,6 +1,8 @@
 package pt.tecnico.bank.domain;
 
-public class Transactions {
+import java.io.Serializable;
+
+public class Transactions implements Serializable {
     private String pubkey;
     private int value;
 

@@ -6,6 +6,14 @@ package pt.tecnico.bank.grpc;
 
 option java_multiple_files = true;
 
+message LastIdRequest {
+}
+
+message LastIdResponse {
+	int32 lastId = 1;
+}
+
+
 message PingRequest {
   string input = 1;
 }
@@ -18,7 +26,6 @@ message PingResponse {
 
 message OpenAccountRequest {
   string public_key = 1;
-  int32 balance = 2;
 }
 
 message OpenAccountResponse {
@@ -72,6 +79,7 @@ message AuditResponse {
 
 
 service ServerService {
+  rpc lastId(LastIdRequest) returns (LastIdResponse);
   rpc ping(PingRequest) returns (PingResponse);
   rpc openAccount(OpenAccountRequest) returns (OpenAccountResponse);
   rpc sendAmount(SendAmountRequest) returns (SendAmountResponse);

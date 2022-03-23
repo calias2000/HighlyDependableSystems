@@ -9,60 +9,42 @@ import pt.tecnico.bank.domain.Transactions;
 import sun.misc.Signal;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 
-public class ServerMain {
+public class ServerMain implements Serializable{
 
-	static List<Client> clientList = new ArrayList<>();
+	static HashMap<String,Client> clientList = new HashMap<>();
 
-	public static void main(String[] args) throws IOException {
+
+	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		System.out.println(ServerMain.class.getSimpleName());
 
-		File file = new File("db.txt");
+		try{
+			FileInputStream fileInput = new FileInputStream(
+					"db.txt");
 
-		BufferedReader br = new BufferedReader(new FileReader(file));
-		String st, pubkey, pending, history;
-		String[] arrayofStr, arrayofPending, arrayofPendingaux, arrayofHistory, arrayofHistoryaux;
-		int balance;
-		List<Transactions> pendingList, historyList;
+			ObjectInputStream objectInput
+					= new ObjectInputStream(fileInput);
 
-		while ((st = br.readLine()) != null) {
-			if (st.isBlank()){
-				System.out.println("Empty DataBase.");
-			}
-			else{
-				pendingList = new ArrayList<>();
-				historyList = new ArrayList<>();
-				arrayofStr = st.split(":");
-				pubkey = arrayofStr[0];
-				balance = Integer.parseInt(arrayofStr[1]);
-				pending = arrayofStr[2];
-				arrayofPending = pending.split(";");
-				for (String p : arrayofPending){
-					arrayofPendingaux = p.split(",");
-					pendingList.add(new Transactions(arrayofPendingaux[0], Integer.parseInt(arrayofPendingaux[1])));
-				}
-				history = arrayofStr[3];
-				arrayofHistory = history.split(";");
-				for (String p : arrayofHistory){
-					arrayofHistoryaux = p.split(",");
-					historyList.add(new Transactions(arrayofHistoryaux[0], Integer.parseInt(arrayofHistoryaux[1])));
-				}
+			clientList = (HashMap<String, Client>)objectInput.readObject();
 
-				clientList.add(new Client(pubkey, balance, pendingList, historyList));
-			}
+			objectInput.close();
+			fileInput.close();
+
+
+		} catch (EOFException e) {
+			e.printStackTrace();
 		}
 
-		for (Client client:clientList){
-			System.out.println("PubKey: " + client.getPubKey() + "\nBalance: " + client.getBalance() + "\n\nTransactions");
-			for (Transactions transaction : client.getPending()){
+
+		for (Map.Entry<String,Client> client: clientList.entrySet()){
+			System.out.println("PubKey: " + client.getKey() + "\nBalance: " + client.getValue().getBalance() + "\n\nTransactions");
+			for (Transactions transaction : client.getValue().getPending()){
 				System.out.println("From " + transaction.getPubkey() + " with value " + transaction.getValue());
 			}
 			System.out.println("\nHistory");
-			for (Transactions transaction : client.getHistory()){
+			for (Transactions transaction : client.getValue().getHistory()){
 				System.out.println("From " + transaction.getPubkey() + " with value " + transaction.getValue());
 			}
 		}
@@ -80,24 +62,21 @@ public class ServerMain {
 				new Scanner(System.in).nextLine();
 
 				try {
-					FileWriter fw = new FileWriter("db.txt");
-					String write = "";
-					for (Client client: clientList){
-						write += client.getPubKey() + ":" + client.getBalance() + ":";
-						for (Transactions trans: client.getPending()){
-							write += trans.getPubkey() + "," + trans.getValue() + ";";
-						}
-						write = write.substring(0, write.length() - 1) + ":";
-						for (Transactions trans: client.getHistory()){
-							write += trans.getPubkey() + "," + trans.getValue() + ";";
-						}
-						write = write.substring(0, write.length() - 1) + "\n";
-					}
-					write = write.substring(0, write.length() - 1);
-					fw.write(write);
-					fw.close();
+					FileOutputStream myFileOutStream
+							= new FileOutputStream(
+							"db.txt");
 
-				} catch (IOException e) {
+					ObjectOutputStream myObjectOutStream
+							= new ObjectOutputStream(myFileOutStream);
+
+					myObjectOutStream.writeObject(clientList);
+
+					// closing FileOutputStream and
+					// ObjectOutputStream
+					myObjectOutStream.close();
+					myFileOutStream.close();
+				}
+				catch (IOException e) {
 					e.printStackTrace();
 				}
 

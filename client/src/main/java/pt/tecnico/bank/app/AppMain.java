@@ -15,10 +15,12 @@ public class AppMain {
 
 		// Initialization of the scanner to scan the input from the user/file
 		Scanner scanner = new Scanner(System.in);
-		String scanned;
+		String scanned, password, id;
 		String[] tokens;
+		String[] parts;
 
 		boolean quit = false;
+		boolean credentials = false;
 
 		while (!quit) {
 			System.out.print("> ");
@@ -26,15 +28,17 @@ public class AppMain {
 			tokens = scanned.split(" ");
 			switch (tokens[0]) {
 				case "open-account":
-					if (tokens.length == 3){
-						app.openAccount(tokens[1], Integer.parseInt(tokens[2]));
+					if (tokens.length == 2) {
+						app.openAccount(tokens[1]);
 					} else {
 						System.out.println("WARNING invalid input.");
 					}
+					System.out.println("Chose your password: \n> ");
+					password = scanner.nextLine();
 					break;
 
 				case "check-account":
-					if (tokens.length == 2){
+					if (tokens.length == 2) {
 						app.checkAccount(tokens[1]);
 					} else {
 						System.out.println("WARNING invalid input.");
@@ -42,7 +46,7 @@ public class AppMain {
 					break;
 
 				case "audit":
-					if (tokens.length == 2){
+					if (tokens.length == 2) {
 						app.audit(tokens[1]);
 					} else {
 						System.out.println("WARNING invalid input.");
@@ -50,7 +54,7 @@ public class AppMain {
 					break;
 
 				case "send-amount":
-					if (tokens.length == 4){
+					if (tokens.length == 4) {
 						app.sendAmount(tokens[1], tokens[2], Integer.parseInt(tokens[3]));
 					} else {
 						System.out.println("WARNING invalid input.");
@@ -58,7 +62,7 @@ public class AppMain {
 					break;
 
 				case "receive-amount":
-					if (tokens.length == 3){
+					if (tokens.length == 3) {
 						app.receiveAmount(tokens[1], Integer.parseInt(tokens[2]));
 					} else {
 						System.out.println("WARNING invalid input.");
@@ -66,7 +70,7 @@ public class AppMain {
 					break;
 
 				case "ping":
-					if (tokens.length == 1){
+					if (tokens.length == 1) {
 						app.ping();
 					} else {
 						System.out.println("WARNING invalid input.");
@@ -85,7 +89,7 @@ public class AppMain {
 							"- check-account X       (show balance and incoming pending transactions from account with pub key X) \n" +
 							"- audit X               (shows the history of transactions from the account with pub key X) \n" +
 							"- ping                  (returns Pong from the server) \n" +
-							"- quit                  (closes the app)");
+							"- quit                  (logs out)");
 					break;
 
 				default:

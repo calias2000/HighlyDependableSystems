@@ -1,21 +1,20 @@
 package pt.tecnico.bank.domain;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
-public class Client {
-    private final String pubKey;
+public class Client implements Serializable {
     private int balance;
     List<Transactions> pending;
     List<Transactions> history;
 
-    public Client(String pubKey, int balance, List<Transactions> pending, List<Transactions> history) {
-        this.pubKey = pubKey;
-        this.balance = balance;
-        this.pending = pending;
-        this.history = history;
+    public Client() {
+        this.balance = 500;
+        this.pending = new ArrayList<>();
+        this.history = new ArrayList<>();
     }
 
-    public String getPubKey() { return pubKey; }
 
     public int getBalance(){ return balance; }
     public void setBalance(int balance) { this.balance = balance; }
