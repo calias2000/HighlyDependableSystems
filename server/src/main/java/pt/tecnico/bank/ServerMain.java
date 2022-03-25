@@ -21,6 +21,15 @@ public class ServerMain implements Serializable{
 		System.out.println(ServerMain.class.getSimpleName());
 
 		try{
+			Process output = Runtime.getRuntime().exec("ipconfig");
+			int exit = output.waitFor();
+			System.out.println("cona " + exit);
+		} catch (IOException | InterruptedException e){
+			e.printStackTrace();
+		}
+
+
+		try{
 			FileInputStream fileInput = new FileInputStream(
 					"db.txt");
 

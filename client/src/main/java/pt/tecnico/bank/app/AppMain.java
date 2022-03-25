@@ -2,11 +2,17 @@ package pt.tecnico.bank.app;
 
 import pt.tecnico.bank.ServerFrontend;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.io.IOException;
+import java.security.*;
+import java.security.cert.CertificateException;
 import java.util.*;
 
 public class AppMain {
 	
-	public static void main(String[] args) throws InterruptedException {
+	public static void main(String[] args) throws IOException, InterruptedException, UnrecoverableKeyException, CertificateException, KeyStoreException, NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
 		System.out.println(AppMain.class.getSimpleName());
 
 		// Initialization of the HubFrontend, App and Tag HashMap
@@ -28,13 +34,13 @@ public class AppMain {
 			tokens = scanned.split(" ");
 			switch (tokens[0]) {
 				case "open-account":
-					if (tokens.length == 2) {
-						app.openAccount(tokens[1]);
+					if (tokens.length == 1) {
+						System.out.println("\nChose your password: ");
+						password = scanner.nextLine();
+						app.openAccount(password);
 					} else {
 						System.out.println("WARNING invalid input.");
 					}
-					System.out.println("Chose your password: \n> ");
-					password = scanner.nextLine();
 					break;
 
 				case "check-account":
