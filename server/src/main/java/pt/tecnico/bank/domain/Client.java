@@ -5,16 +5,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Client implements Serializable {
+    private String username;
     private int balance;
-    List<Transactions> pending;
-    List<Transactions> history;
+    private List<Transactions> pending;
+    private List<Transactions> history;
 
-    public Client() {
+    public Client(String username) {
+        this.username = username;
         this.balance = 500;
         this.pending = new ArrayList<>();
         this.history = new ArrayList<>();
     }
 
+    public String getUsername() { return this.username; }
 
     public int getBalance(){ return balance; }
     public void setBalance(int balance) { this.balance = balance; }

@@ -25,7 +25,8 @@ message PingResponse {
 
 
 message OpenAccountRequest {
-  string public_key = 1;
+  bytes public_key = 1;
+  string username = 2;
 }
 
 message OpenAccountResponse {
@@ -35,19 +36,21 @@ message OpenAccountResponse {
 
 
 message SendAmountRequest {
-  string sender_key = 1;
-  string receiver_key = 2;
+  bytes sender_key = 1;
+  bytes receiver_key = 2;
   int32 amount = 3;
+  bytes nonce = 4;
 }
 
 message SendAmountResponse {
   bool ack = 1;
+  bytes nonce = 2;
 }
 
 
 
 message CheckAccountRequest {
-  string public_key = 1;
+  bytes public_key = 1;
 }
 
 message CheckAccountResponse {
@@ -58,7 +61,7 @@ message CheckAccountResponse {
 
 
 message ReceiveAmountRequest {
-  string public_key = 1;
+  bytes public_key = 1;
   int32 transfer = 2;
 }
 
@@ -69,7 +72,7 @@ message ReceiveAmountResponse {
 
 
 message AuditRequest {
-  string public_key = 1;
+  bytes public_key = 1;
 }
 
 message AuditResponse {

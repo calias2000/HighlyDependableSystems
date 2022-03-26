@@ -1,5 +1,6 @@
 package pt.tecnico.bank.app;
 
+import com.google.protobuf.ByteString;
 import io.grpc.StatusRuntimeException;
 import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
@@ -10,12 +11,14 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
 
@@ -45,82 +48,25 @@ public class App {
         System.out.println("\n" + frontend.ping(request).getOutput() + "\n");
     }
 
+    // VERIFICAR SE USERNAME JA EXISTE
+    public void openAccount(PublicKey publicKey, String username) {
+        /*FileInputStream fin = new FileInputStream("Certificates/" + lastID + ".cer");
+        CertificateFactory f = CertificateFactory.getInstance("X.509");
+        X509Certificate certificate1 = (X509Certificate)f.generateCertificate(fin);
+        PublicKey pk = certificate1.getPublicKey();
+        System.out.println(pk);*/
 
-    public void openAccount(String password) throws IOException, InterruptedException, KeyStoreException, CertificateException, NoSuchAlgorithmException, UnrecoverableKeyException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
-        int lastID = lastId();
-        System.out.println(lastID);
-
-        String[] keystore_array = new String[14];
-        keystore_array[0] = "keytool";
-        keystore_array[1] = "-genkey";
-        keystore_array[2] = "-alias";
-        keystore_array[3] = String.valueOf(lastID);
-        keystore_array[4] = "-keyalg";
-        keystore_array[5] = "RSA";
-        keystore_array[6] = "-keystore";
-        keystore_array[7] = "Keystores/" + lastID + ".jks";
-        keystore_array[8] = "-dname";
-        keystore_array[9] = "CN=mqttserver.ibm.com, OU=ID, O=IBM, L=Hursley, S=Hantes, C=GB";
-        keystore_array[10] = "-storepass";
-        keystore_array[11] = password;
-        keystore_array[12] = "-keypass";
-        keystore_array[13] = password;
-
-        ProcessBuilder builder = new ProcessBuilder(keystore_array);
-        Process process = builder.start();
-        process.waitFor();
-
-        String[] certificate = new String[11];
-        certificate[0] = "keytool";
-        certificate[1] = "-v";
-        certificate[2] = "-export";
-        certificate[3] = "-alias";
-        certificate[4] = String.valueOf(lastID);
-        certificate[5] = "-file";
-        certificate[6] = "Certificates/" + lastID + ".cer";
-        certificate[7] = "-keystore";
-        certificate[8] = "Keystores/" + lastID + ".jks";
-        certificate[9] = "-storepass";
-        certificate[10] = password;
-
-        builder.command(certificate).start();
-
-        FileInputStream is = new FileInputStream("Keystores/" + lastID + ".jks");
-
-        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        char[] passwd = password.toCharArray();
-        keystore.load(is, passwd);
-        String alias = String.valueOf(lastID);
-        Key key = keystore.getKey(alias, passwd);
-        if (key instanceof PrivateKey) {
-            Certificate cert = keystore.getCertificate(alias);
-            PublicKey publicKey = cert.getPublicKey();
-
-            String test = "Gonçalo";
-            Cipher cipher = Cipher.getInstance("RSA");
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-            cipher.update(test.getBytes());
-            final byte[] result = cipher.doFinal();
-
-            System.out.println("Message: " + test);
-            System.out.println("Encrypted: " + Base64.getEncoder().encodeToString(result));
-
-            cipher.init(Cipher.DECRYPT_MODE, key);
-            byte[] decryptedB = cipher.doFinal(result);
-            String decrypted = new String(decryptedB, StandardCharsets.UTF_8);
-            System.out.println(decrypted);
-        }
-
-
-        OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(password).build();
+        OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setUsername(username).build();
         if (frontend.openAccount(request).getAck()) {
-            System.out.println("\nAccount created successfuly with ID: " + lastId() + ".\n");
+            System.out.println("\nAccount created successfuly with username: " + username + "\n");
         }
     }
 
-    public void checkAccount(String pubkey){
+    public void checkAccount(PublicKey publicKey){
         try {
-            CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(pubkey).build();
+
+            CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+
             List<String> pending = frontend.checkAccount(request).getPendentTransfersList();
 
             if (pending.isEmpty()) {
@@ -139,9 +85,9 @@ public class App {
         }
     }
 
-    public void audit(String pubkey){
+    public void audit(PublicKey publicKey){
         try {
-            AuditRequest request = AuditRequest.newBuilder().setPublicKey(pubkey).build();
+            AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
             List<String> history = frontend.audit(request).getTransferHistoryList();
 
             if (history.isEmpty()) {
@@ -160,9 +106,13 @@ public class App {
         }
     }
 
-    public void sendAmount(String keySender, String keyReceiver, int value){
+    public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
         try {
-            SendAmountRequest request = SendAmountRequest.newBuilder().setSenderKey(keySender).setReceiverKey(keyReceiver).setAmount(value).build();
+            SendAmountRequest request = SendAmountRequest.newBuilder()
+                    .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
+                    .setReceiverKey(ByteString.copyFrom(receiverPubK.getEncoded()))
+                    .setAmount(amount).build();
+
             if (frontend.sendAmount(request).getAck()) {
                 System.out.println("\nPending transaction, waiting for approval.\n");
             }
@@ -171,9 +121,9 @@ public class App {
         }
     }
 
-    public void receiveAmount(String pubkey, int transfer) {
+    public void receiveAmount(PublicKey publicKey, int transfer) {
         try {
-            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(pubkey).setTransfer(transfer).build();
+            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setTransfer(transfer).build();
             if (frontend.receiveAmount(request).getAck()) {
                 System.out.println("\nTransaction Accepted.\n");
             }

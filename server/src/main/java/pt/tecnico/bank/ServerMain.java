@@ -3,31 +3,22 @@ package pt.tecnico.bank;
 import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import org.apache.commons.lang3.tuple.Pair;
 import pt.tecnico.bank.domain.Client;
 import pt.tecnico.bank.domain.Transactions;
 import sun.misc.Signal;
 
 import java.io.*;
+import java.security.PublicKey;
 import java.util.*;
 
 
 public class ServerMain implements Serializable{
 
-	static HashMap<String,Client> clientList = new HashMap<>();
+	static HashMap<PublicKey,Client> clientList = new HashMap<>();
 
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		System.out.println(ServerMain.class.getSimpleName());
-
-		try{
-			Process output = Runtime.getRuntime().exec("ipconfig");
-			int exit = output.waitFor();
-			System.out.println("cona " + exit);
-		} catch (IOException | InterruptedException e){
-			e.printStackTrace();
-		}
-
 
 		try{
 			FileInputStream fileInput = new FileInputStream(
@@ -36,26 +27,30 @@ public class ServerMain implements Serializable{
 			ObjectInputStream objectInput
 					= new ObjectInputStream(fileInput);
 
-			clientList = (HashMap<String, Client>)objectInput.readObject();
+			clientList = (HashMap<PublicKey, Client>)objectInput.readObject();
 
 			objectInput.close();
 			fileInput.close();
 
 
 		} catch (EOFException e) {
-			e.printStackTrace();
+			System.out.println("EMPTY DATABASE!!");
 		}
 
 
-		for (Map.Entry<String,Client> client: clientList.entrySet()){
-			System.out.println("PubKey: " + client.getKey() + "\nBalance: " + client.getValue().getBalance() + "\n\nTransactions");
+		for (Map.Entry<PublicKey,Client> client: clientList.entrySet()){
+			System.out.println("Username: " + client.getValue().getUsername() + "\nBalance: " + client.getValue().getBalance() + "\n\nTransactions");
+
 			for (Transactions transaction : client.getValue().getPending()){
-				System.out.println("From " + transaction.getPubkey() + " with value " + transaction.getValue());
+				System.out.println("From " + transaction.getUsername() + " with value " + transaction.getValue());
 			}
+
 			System.out.println("\nHistory");
 			for (Transactions transaction : client.getValue().getHistory()){
-				System.out.println("From " + transaction.getPubkey() + " with value " + transaction.getValue());
+				System.out.println("From " + transaction.getUsername() + " with value " + transaction.getValue());
 			}
+
+			System.out.println("\nPUBLIC KEY\n" + client.getKey());
 		}
 
 		try {
@@ -71,17 +66,9 @@ public class ServerMain implements Serializable{
 				new Scanner(System.in).nextLine();
 
 				try {
-					FileOutputStream myFileOutStream
-							= new FileOutputStream(
-							"db.txt");
-
-					ObjectOutputStream myObjectOutStream
-							= new ObjectOutputStream(myFileOutStream);
-
+					FileOutputStream myFileOutStream = new FileOutputStream("db.txt");
+					ObjectOutputStream myObjectOutStream = new ObjectOutputStream(myFileOutStream);
 					myObjectOutStream.writeObject(clientList);
-
-					// closing FileOutputStream and
-					// ObjectOutputStream
 					myObjectOutStream.close();
 					myFileOutStream.close();
 				}
