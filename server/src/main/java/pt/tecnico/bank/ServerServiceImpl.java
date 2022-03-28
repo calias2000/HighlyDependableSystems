@@ -6,9 +6,7 @@ import pt.tecnico.bank.domain.Client;
 import pt.tecnico.bank.domain.Transactions;
 import pt.tecnico.bank.grpc.*;
 
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
+import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
@@ -55,6 +53,27 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         }
     }
 
+    public void checkAccount(CheckAccountRequest request, StreamObserver<CheckAccountResponse> responseObserver) {
+        try {
+
+            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
+            List<String> pending = new ArrayList<>();
+
+            Client client = clientList.get(publicKey);
+
+            for (int i = 0; i < client.getPending().size(); i++) {
+                pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+            }
+
+            CheckAccountResponse response = CheckAccountResponse.newBuilder().setBalance(client.getBalance()).addAllPendentTransfers(pending).build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            System.out.println("Something wrong with the keys!");
+        }
+    }
+
     public void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
         try {
             PublicKey keySender = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getSenderKey().toByteArray()));
@@ -64,11 +83,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             Client clientSender = clientList.get(keySender);
             Client clientReceiver = clientList.get(keyReceiver);
 
-            if (clientSender == null) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Sender account does not exist.").asRuntimeException());
-            } else if (clientReceiver == null) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Receiver account does not exist.").asRuntimeException());
-            } else if (clientSender.getBalance() < ammount) {
+            if (clientSender.getBalance() < ammount) {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Sender account does not have enough balance.").asRuntimeException());
             } else if (0 >= ammount) {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid ammount, must be > 0.").asRuntimeException());
@@ -83,60 +98,41 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         }
     }
 
-    public void checkAccount(CheckAccountRequest request, StreamObserver<CheckAccountResponse> responseObserver) {
-        try {
-
-            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            List<String> pending = new ArrayList<>();
-
-            Client client = clientList.get(publicKey);
-
-            if (client == null) {
-                System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Account does not exist.").asRuntimeException());
-            } else {
-
-                for (int i = 0; i < client.getPending().size(); i++) {
-                    pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
-                }
-
-                CheckAccountResponse response = CheckAccountResponse.newBuilder().setBalance(client.getBalance()).addAllPendentTransfers(pending).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-            }
-
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
-        }
-    }
-
     public void receiveAmount(ReceiveAmountRequest request, StreamObserver<ReceiveAmountResponse> responseObserver) {
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            int transfer = request.getTransfer() - 1;
+            int transfer = request.getTransfer();
+            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
+            dsaForVerify.initVerify(publicKey);
+            dsaForVerify.update(String.valueOf(transfer).getBytes());
+            boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
+            if (verifies) {
 
-            Client client = clientList.get(publicKey);
+                Client client = clientList.get(publicKey);
 
-            if (client == null) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Account does not exist.").asRuntimeException());
+                if (transfer + 1 > client.getPending().size()) {
+                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect transfer ID.").asRuntimeException());
+                } else {
+                    Transactions transaction = client.getPending().get(transfer);
+                    client.setBalance(client.getBalance() + transaction.getValue());
+
+                    Client client2 = clientList.get(transaction.getPublicKey());
+                    client2.setBalance(client2.getBalance() - transaction.getValue());
+
+                    client.removePending(transfer);
+                    client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
+                    client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
+
+
+                    ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder().setAck(true).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                }
             } else {
-                Transactions transaction = client.getPending().get(transfer);
-                client.setBalance(client.getBalance() + transaction.getValue());
-
-                Client client2 = clientList.get(transaction.getPublicKey());
-                client2.setBalance(client2.getBalance() - transaction.getValue());
-
-                client.removePending(transfer);
-                client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
-                client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
-
-
-                ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder().setAck(true).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
             System.out.println("Something wrong with the keys!");
         }
     }
@@ -149,22 +145,18 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client client = clientList.get(publicKey);
 
-            if (client == null) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Account does not exist.").asRuntimeException());
-            } else {
-
-                for (int i = 0; i < client.getHistory().size(); i++) {
-                    if (client.getHistory().get(i).getValue() < 0) {
-                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
-                    } else {
-                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
-                    }
+            for (int i = 0; i < client.getHistory().size(); i++) {
+                if (client.getHistory().get(i).getValue() < 0) {
+                    history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
+                } else {
+                    history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
                 }
-
-                AuditResponse response = AuditResponse.newBuilder().addAllTransferHistory(history).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
             }
+
+            AuditResponse response = AuditResponse.newBuilder().addAllTransferHistory(history).build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             System.out.println("Something wrong with the keys!");
         }

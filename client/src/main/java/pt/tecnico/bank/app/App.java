@@ -58,7 +58,7 @@ public class App {
 
         OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setUsername(username).build();
         if (frontend.openAccount(request).getAck()) {
-            System.out.println("\nAccount created successfuly with username: " + username + "\n");
+            System.out.println("\nAccount created successfully with username: " + username + "\n");
         }
     }
 
@@ -85,27 +85,6 @@ public class App {
         }
     }
 
-    public void audit(PublicKey publicKey){
-        try {
-            AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
-            List<String> history = frontend.audit(request).getTransferHistoryList();
-
-            if (history.isEmpty()) {
-                System.out.println("\nNo history to be shown.\n");
-            } else {
-                System.out.println("\nHistory:");
-
-                for (String p : history) {
-                    System.out.println(p);
-                }
-
-                System.out.println();
-            }
-        } catch (StatusRuntimeException e) {
-            System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
-        }
-    }
-
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
         try {
             SendAmountRequest request = SendAmountRequest.newBuilder()
@@ -121,11 +100,40 @@ public class App {
         }
     }
 
-    public void receiveAmount(PublicKey publicKey, int transfer) {
+    public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
         try {
-            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setTransfer(transfer).build();
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(privateKey);
+            dsaForSign.update(String.valueOf(transfer).getBytes());
+            byte[] signature = dsaForSign.sign();
+            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                    .setSignature(ByteString.copyFrom(signature))
+                    .setTransfer(transfer).build();
             if (frontend.receiveAmount(request).getAck()) {
                 System.out.println("\nTransaction Accepted.\n");
+            }
+        } catch (StatusRuntimeException e) {
+            System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
+            System.out.println("ERROR while signing.\n");
+        }
+    }
+
+    public void audit(PublicKey publicKey){
+        try {
+            AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+            List<String> history = frontend.audit(request).getTransferHistoryList();
+
+            if (history.isEmpty()) {
+                System.out.println("\nNo history to be shown.\n");
+            } else {
+                System.out.println("\nHistory:");
+
+                for (String p : history) {
+                    System.out.println(p);
+                }
+
+                System.out.println();
             }
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");

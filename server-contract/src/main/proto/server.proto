@@ -62,7 +62,8 @@ message CheckAccountResponse {
 
 message ReceiveAmountRequest {
   bytes public_key = 1;
-  int32 transfer = 2;
+  bytes signature = 2;
+  int32 transfer = 3;
 }
 
 message ReceiveAmountResponse {
