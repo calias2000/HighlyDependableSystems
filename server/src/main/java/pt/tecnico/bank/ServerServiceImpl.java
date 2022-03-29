@@ -3,6 +3,7 @@ package pt.tecnico.bank;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import pt.tecnico.bank.domain.Client;
+import pt.tecnico.bank.domain.Event;
 import pt.tecnico.bank.domain.Transactions;
 import pt.tecnico.bank.grpc.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 
 import static io.grpc.Status.INVALID_ARGUMENT;
 import static pt.tecnico.bank.ServerMain.clientList;
+import static pt.tecnico.bank.ServerMain.eventList;
 
 
 public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
@@ -102,34 +104,44 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             int transfer = request.getTransfer();
+            int nonce = request.getNonce();
+            long timestamp = request.getTimestamp();
             Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
             dsaForVerify.initVerify(publicKey);
             dsaForVerify.update(String.valueOf(transfer).getBytes());
             boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
-            if (verifies) {
+            boolean repeatedEvent = false;
 
-                Client client = clientList.get(publicKey);
-
-                if (transfer + 1 > client.getPending().size()) {
-                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect transfer ID.").asRuntimeException());
-                } else {
-                    Transactions transaction = client.getPending().get(transfer);
-                    client.setBalance(client.getBalance() + transaction.getValue());
-
-                    Client client2 = clientList.get(transaction.getPublicKey());
-                    client2.setBalance(client2.getBalance() - transaction.getValue());
-
-                    client.removePending(transfer);
-                    client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
-                    client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
-
-
-                    ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder().setAck(true).build();
-                    responseObserver.onNext(response);
-                    responseObserver.onCompleted();
+            for (Event event : eventList){
+                if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
+                    repeatedEvent = true;
+                    break;
                 }
+            }
+
+            Client client = clientList.get(publicKey);
+
+            if (verifies && !repeatedEvent && transfer + 1 <= client.getPending().size()) {
+
+                eventList.add(new Event(nonce, timestamp));
+
+                Transactions transaction = client.getPending().get(transfer);
+                client.setBalance(client.getBalance() + transaction.getValue());
+
+                Client client2 = clientList.get(transaction.getPublicKey());
+                client2.setBalance(client2.getBalance() - transaction.getValue());
+
+                client.removePending(transfer);
+                client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
+                client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
+
+
+                ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder().setAck(true).build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {

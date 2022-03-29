@@ -64,6 +64,8 @@ message ReceiveAmountRequest {
   bytes public_key = 1;
   bytes signature = 2;
   int32 transfer = 3;
+  int32 nonce = 4;
+  int64 timestamp = 5;
 }
 
 message ReceiveAmountResponse {

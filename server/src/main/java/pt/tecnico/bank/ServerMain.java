@@ -4,6 +4,7 @@ import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import pt.tecnico.bank.domain.Client;
+import pt.tecnico.bank.domain.Event;
 import pt.tecnico.bank.domain.Transactions;
 import sun.misc.Signal;
 
@@ -15,7 +16,7 @@ import java.util.*;
 public class ServerMain implements Serializable{
 
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
-
+	static List<Event> eventList = new ArrayList<>();
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		System.out.println(ServerMain.class.getSimpleName());

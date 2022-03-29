@@ -20,6 +20,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 
 public class App {
@@ -106,9 +107,14 @@ public class App {
             dsaForSign.initSign(privateKey);
             dsaForSign.update(String.valueOf(transfer).getBytes());
             byte[] signature = dsaForSign.sign();
+            int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
+            long timeMilli = new Date().getTime();
             ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                     .setSignature(ByteString.copyFrom(signature))
-                    .setTransfer(transfer).build();
+                    .setTransfer(transfer)
+                    .setNonce(random)
+                    .setTimestamp(timeMilli)
+                    .build();
             if (frontend.receiveAmount(request).getAck()) {
                 System.out.println("\nTransaction Accepted.\n");
             }
