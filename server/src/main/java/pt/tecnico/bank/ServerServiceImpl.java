@@ -19,13 +19,6 @@ import static pt.tecnico.bank.ServerMain.eventList;
 
 public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
-    public void lastId(LastIdRequest request, StreamObserver<LastIdResponse> responseObserver){
-
-        LastIdResponse response = LastIdResponse.newBuilder().setLastId(clientList.size()).build();
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
-    }
-
     public void ping(PingRequest request, StreamObserver<PingResponse> responseObserver) {
         String input = request.getInput();
 
@@ -99,6 +92,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             }
 
             if (verifies && !repeatedEvent) {
+
+                eventList.add(new Event(nonce, timestamp));
+
                 Client clientSender = clientList.get(keySender);
                 Client clientReceiver = clientList.get(keyReceiver);
 

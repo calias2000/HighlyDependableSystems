@@ -23,8 +23,7 @@ public class ServerMain implements Serializable{
 		try{
 			FileInputStream fileInput = new FileInputStream("db.txt");
 
-			ObjectInputStream objectInput
-					= new ObjectInputStream(fileInput);
+			ObjectInputStream objectInput = new ObjectInputStream(fileInput);
 
 			clientList = (HashMap<PublicKey, Client>)objectInput.readObject();
 

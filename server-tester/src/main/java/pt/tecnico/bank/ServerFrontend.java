@@ -20,10 +20,6 @@ public class ServerFrontend implements Closeable {
 
     public PingResponse ping(PingRequest request) { return stub.ping(request); }
 
-    public LastIdResponse lastId(LastIdRequest request) {
-        return stub.lastId(request);
-    }
-
     public OpenAccountResponse openAccount(OpenAccountRequest request) {
         return stub.openAccount(request);
     }
