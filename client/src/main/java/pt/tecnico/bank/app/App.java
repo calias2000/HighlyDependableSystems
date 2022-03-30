@@ -4,22 +4,7 @@ import com.google.protobuf.ByteString;
 import io.grpc.StatusRuntimeException;
 import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.*;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 
@@ -31,17 +16,7 @@ public class App {
         this.frontend = frontend;
     }
 
-    // App methods that send requests to the HubServiceImpl and returns responses to the user
-    // Before each server request the method "checkServerConnection" is run to connect to an available hub
-
-
-    /**
-     * Prints to the console the result of a PingRequest.
-     */
-    public int lastId() {
-        LastIdRequest request = LastIdRequest.newBuilder().build();
-        return frontend.lastId(request).getLastId() + 1;
-    }
+    // App methods that send requests to the ServerServiceImpl and returns responses to the user
 
 
     public void ping() {
@@ -49,14 +24,7 @@ public class App {
         System.out.println("\n" + frontend.ping(request).getOutput() + "\n");
     }
 
-    // VERIFICAR SE USERNAME JA EXISTE
     public void openAccount(PublicKey publicKey, String username) {
-        /*FileInputStream fin = new FileInputStream("Certificates/" + lastID + ".cer");
-        CertificateFactory f = CertificateFactory.getInstance("X.509");
-        X509Certificate certificate1 = (X509Certificate)f.generateCertificate(fin);
-        PublicKey pk = certificate1.getPublicKey();
-        System.out.println(pk);*/
-
         OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setUsername(username).build();
         if (frontend.openAccount(request).getAck()) {
             System.out.println("\nAccount created successfully with username: " + username + "\n");
@@ -65,7 +33,6 @@ public class App {
 
     public void checkAccount(PublicKey publicKey){
         try {
-
             CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
 
             List<String> pending = frontend.checkAccount(request).getPendentTransfersList();
@@ -88,28 +55,43 @@ public class App {
 
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
         try {
+            int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
+            long timeMilli = new Date().getTime();
+            String finalString = senderPubK.toString() + amount + random + timeMilli + receiverPubK.toString();
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(senderPrivK);
+            dsaForSign.update(finalString.getBytes());
+            byte[] signature = dsaForSign.sign();
             SendAmountRequest request = SendAmountRequest.newBuilder()
                     .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
                     .setReceiverKey(ByteString.copyFrom(receiverPubK.getEncoded()))
-                    .setAmount(amount).build();
+                    .setAmount(amount)
+                    .setNonce(random)
+                    .setTimestamp(timeMilli)
+                    .setSignature(ByteString.copyFrom(signature))
+                    .build();
 
             if (frontend.sendAmount(request).getAck()) {
                 System.out.println("\nPending transaction, waiting for approval.\n");
             }
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
+            System.out.println("ERROR while signing.\n");
         }
     }
 
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
         try {
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(privateKey);
-            dsaForSign.update(String.valueOf(transfer).getBytes());
-            byte[] signature = dsaForSign.sign();
             int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
             long timeMilli = new Date().getTime();
-            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+            String finalString = publicKey.toString() + transfer + random + timeMilli;
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(privateKey);
+            dsaForSign.update(finalString.getBytes());
+            byte[] signature = dsaForSign.sign();
+            ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
+                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                     .setSignature(ByteString.copyFrom(signature))
                     .setTransfer(transfer)
                     .setNonce(random)
@@ -118,6 +100,7 @@ public class App {
             if (frontend.receiveAmount(request).getAck()) {
                 System.out.println("\nTransaction Accepted.\n");
             }
+
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
         } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {

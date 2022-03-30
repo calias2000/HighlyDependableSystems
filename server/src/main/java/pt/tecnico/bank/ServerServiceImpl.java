@@ -1,6 +1,5 @@
 package pt.tecnico.bank;
 
-import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import pt.tecnico.bank.domain.Client;
 import pt.tecnico.bank.domain.Event;
@@ -80,22 +79,44 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         try {
             PublicKey keySender = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getSenderKey().toByteArray()));
             PublicKey keyReceiver = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getReceiverKey().toByteArray()));
-            int ammount = request.getAmount();
+            int amount = request.getAmount();
+            int nonce = request.getNonce();
+            long timestamp = request.getTimestamp();
 
-            Client clientSender = clientList.get(keySender);
-            Client clientReceiver = clientList.get(keyReceiver);
+            String finalString = keySender.toString() + amount + nonce + timestamp + keyReceiver.toString();
 
-            if (clientSender.getBalance() < ammount) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Sender account does not have enough balance.").asRuntimeException());
-            } else if (0 >= ammount) {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid ammount, must be > 0.").asRuntimeException());
-            } else {
-                clientReceiver.addPending(new Transactions(clientSender.getUsername(), ammount, keySender));
-                SendAmountResponse response = SendAmountResponse.newBuilder().setAck(true).build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
+            dsaForVerify.initVerify(keySender);
+            dsaForVerify.update(finalString.getBytes());
+            boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
+            boolean repeatedEvent = false;
+
+            for (Event event : eventList){
+                if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
+                    repeatedEvent = true;
+                    break;
+                }
             }
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+
+            if (verifies && !repeatedEvent) {
+                Client clientSender = clientList.get(keySender);
+                Client clientReceiver = clientList.get(keyReceiver);
+
+                if (clientSender.getBalance() < amount) {
+                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Sender account does not have enough balance.").asRuntimeException());
+                } else if (0 >= amount) {
+                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid amount, must be > 0.").asRuntimeException());
+                } else {
+                    clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender));
+                    SendAmountResponse response = SendAmountResponse.newBuilder().setAck(true).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                }
+            } else {
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
+            }
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
             System.out.println("Something wrong with the keys!");
         }
     }
@@ -106,9 +127,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             int transfer = request.getTransfer();
             int nonce = request.getNonce();
             long timestamp = request.getTimestamp();
+            String finalString = publicKey.toString() + transfer + nonce + timestamp;
             Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
             dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(String.valueOf(transfer).getBytes());
+            dsaForVerify.update(finalString.getBytes());
             boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
             boolean repeatedEvent = false;
 

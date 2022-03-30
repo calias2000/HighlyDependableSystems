@@ -6,15 +6,11 @@ import pt.tecnico.bank.grpc.*;
 
 import java.io.Closeable;
 
-
 public class ServerFrontend implements Closeable {
 
     private final ManagedChannel channel;
     private final ServerServiceGrpc.ServerServiceBlockingStub stub;
 
-    /**
-     * Creates a frontend that contacts the only replica.
-     */
     public ServerFrontend() {
         this.channel = ManagedChannelBuilder.forAddress("localhost", 8080).usePlaintext().build();
         this.stub = ServerServiceGrpc.newBlockingStub(this.channel);
@@ -22,9 +18,7 @@ public class ServerFrontend implements Closeable {
 
     /* ---------- Services ---------- */
 
-    public PingResponse ping(PingRequest request) {
-        return stub.ping(request);
-    }
+    public PingResponse ping(PingRequest request) { return stub.ping(request); }
 
     public LastIdResponse lastId(LastIdRequest request) {
         return stub.lastId(request);

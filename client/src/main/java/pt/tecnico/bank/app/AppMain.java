@@ -1,10 +1,6 @@
 package pt.tecnico.bank.app;
 
 import pt.tecnico.bank.ServerFrontend;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -17,18 +13,14 @@ import java.util.*;
 
 public class AppMain {
 	
-	public static void main(String[] args) throws IOException, InterruptedException, UnrecoverableKeyException, CertificateException, KeyStoreException, NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
-		System.out.println(AppMain.class.getSimpleName());
+	public static void main(String[] args) {
 
-		// Initialization of the HubFrontend, App and Tag HashMap
+		// Initialization of the server frontend and App object
 		ServerFrontend frontend = new ServerFrontend();
 		App app = new App(frontend);
 
-		// Initialization of the scanner to scan the input from the user/file
 		Scanner scanner = new Scanner(System.in);
-		String scanned, receiverUsername, username;
-		String accountUsername = "";
-		String accountPassword = "";
+		String scanned, receiverUsername, username, accountUsername, accountPassword;
 		int amount, transactionNumber;
 		KeyPair keyPair = null;
 
@@ -50,7 +42,10 @@ public class AppMain {
 					accountUsername = scanner.nextLine();
 					System.out.print("Choose your account password: ");
 					accountPassword = scanner.nextLine();
-					if (!existsAccount(accountUsername)) {
+					if (accountPassword.length() < 6) {
+						System.out.println("Password has to be at least 6 characters long.");
+					}
+					else if (!existsAccount(accountUsername)) {
 						generateStoreandCer(accountUsername, accountPassword);
 						keyPair = getKeyPair(accountUsername, accountPassword);
 						app.openAccount(keyPair.getPublic(), accountUsername);
@@ -102,7 +97,7 @@ public class AppMain {
 						System.out.print("\nAccount username: ");
 						username = scanner.nextLine();
 						if (existsAccount(username)){
-							app.checkAccount(getPubkKeyfromCert(username));
+							app.checkAccount(getPubKeyfromCert(username));
 						} else {
 							System.out.println("No account found with that username.");
 						}
@@ -111,10 +106,10 @@ public class AppMain {
 					case "2":
 						System.out.print("\nReceiver username: ");
 						receiverUsername = scanner.nextLine();
-						System.out.print("\nAmount: ");
+						System.out.print("Amount: ");
 						amount = Integer.parseInt(scanner.nextLine());
 						if (existsAccount(receiverUsername)) {
-							app.sendAmount(keyPair.getPublic(), getPubkKeyfromCert(receiverUsername), amount, keyPair.getPrivate());
+							app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate());
 						} else {
 							System.out.println("No account found with that username.");
 						}
@@ -130,7 +125,7 @@ public class AppMain {
 						System.out.print("\nAccount username: ");
 						username = scanner.nextLine();
 						if (existsAccount(username)) {
-							app.audit(getPubkKeyfromCert(username));
+							app.audit(getPubKeyfromCert(username));
 						} else {
 							System.out.println("No account found with that username.");
 						}
@@ -153,79 +148,76 @@ public class AppMain {
 		}
 	}
 
-	public static void generateStoreandCer(String username, String password) throws IOException, InterruptedException {
+	public static void generateStoreandCer(String username, String password) {
 
-		String[] keystore_array = new String[14];
-		keystore_array[0] = "keytool";
-		keystore_array[1] = "-genkey";
-		keystore_array[2] = "-alias";
-		keystore_array[3] = username;
-		keystore_array[4] = "-keyalg";
-		keystore_array[5] = "RSA";
-		keystore_array[6] = "-keystore";
-		keystore_array[7] = "Keystores/" + username + ".jks";
-		keystore_array[8] = "-dname";
-		keystore_array[9] = "CN=mqttserver.ibm.com, OU=ID, O=IBM, L=Hursley, S=Hantes, C=GB";
-		keystore_array[10] = "-storepass";
-		keystore_array[11] = password;
-		keystore_array[12] = "-keypass";
-		keystore_array[13] = password;
+		try {
+			String[] keystore_array = new String[14];
+			keystore_array[0] = "keytool";
+			keystore_array[1] = "-genkey";
+			keystore_array[2] = "-alias";
+			keystore_array[3] = username;
+			keystore_array[4] = "-keyalg";
+			keystore_array[5] = "RSA";
+			keystore_array[6] = "-keystore";
+			keystore_array[7] = "Keystores/" + username + ".jks";
+			keystore_array[8] = "-dname";
+			keystore_array[9] = "CN=mqttserver.ibm.com, OU=ID, O=IBM, L=Hursley, S=Hantes, C=GB";
+			keystore_array[10] = "-storepass";
+			keystore_array[11] = password;
+			keystore_array[12] = "-keypass";
+			keystore_array[13] = password;
 
-		ProcessBuilder builder = new ProcessBuilder(keystore_array);
-		Process process = builder.start();
-		process.waitFor();
+			ProcessBuilder builder = new ProcessBuilder(keystore_array);
+			Process process = builder.start();
+			process.waitFor();
 
-		String[] certificate = new String[11];
-		certificate[0] = "keytool";
-		certificate[1] = "-v";
-		certificate[2] = "-export";
-		certificate[3] = "-alias";
-		certificate[4] = username;
-		certificate[5] = "-file";
-		certificate[6] = "Certificates/" + username + ".cer";
-		certificate[7] = "-keystore";
-		certificate[8] = "Keystores/" + username + ".jks";
-		certificate[9] = "-storepass";
-		certificate[10] = password;
+			String[] certificate = new String[11];
+			certificate[0] = "keytool";
+			certificate[1] = "-v";
+			certificate[2] = "-export";
+			certificate[3] = "-alias";
+			certificate[4] = username;
+			certificate[5] = "-file";
+			certificate[6] = "Certificates/" + username + ".cer";
+			certificate[7] = "-keystore";
+			certificate[8] = "Keystores/" + username + ".jks";
+			certificate[9] = "-storepass";
+			certificate[10] = password;
 
-		builder.command(certificate).start();
+			builder.command(certificate).start();
+
+		} catch (IOException | InterruptedException e) {
+			System.out.println("ERROR while running Keytool commands.");
+		}
 	}
 
-	public static KeyPair getKeyPair(String username, String password) throws IOException, CertificateException, UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException {
+	public static KeyPair getKeyPair(String username, String password) {
+		try {
+			FileInputStream is = new FileInputStream("Keystores/" + username + ".jks");
+			KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+			char[] passwd = password.toCharArray();
+			keystore.load(is, passwd);
+			Key key = keystore.getKey(username, passwd);
+			Certificate cert = keystore.getCertificate(username);
+			PublicKey publicKey = cert.getPublicKey();
+			return new KeyPair(publicKey, (PrivateKey) key);
 
-		FileInputStream is = new FileInputStream("Keystores/" + username + ".jks");
-		KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-		char[] passwd = password.toCharArray();
-		keystore.load(is, passwd);
-		Key key = keystore.getKey(username, passwd);
-		Certificate cert = keystore.getCertificate(username);
-
-		// Get public key
-		PublicKey publicKey = cert.getPublicKey();
-
-		// Return a key pair
-		return new KeyPair(publicKey, (PrivateKey) key);
-
-        /*String test = "Gonçalo";
-        Cipher cipher = Cipher.getInstance("RSA");
-        cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-        cipher.update(test.getBytes());
-        final byte[] result = cipher.doFinal();
-
-        System.out.println("Message: " + test);
-        System.out.println("Encrypted: " + Base64.getEncoder().encodeToString(result));
-
-        cipher.init(Cipher.DECRYPT_MODE, key);
-        byte[] decryptedB = cipher.doFinal(result);
-        String decrypted = new String(decryptedB, StandardCharsets.UTF_8);
-        System.out.println(decrypted);*/
+		} catch (IOException | CertificateException | UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException e) {
+			System.out.println("ERROR while retrieving keypair from keystore.");
+			return null;
+		}
 	}
 
-	public static PublicKey getPubkKeyfromCert(String username) throws FileNotFoundException, CertificateException {
-		FileInputStream fin = new FileInputStream("Certificates/" + username + ".cer");
-		CertificateFactory f = CertificateFactory.getInstance("X.509");
-		X509Certificate certificate1 = (X509Certificate)f.generateCertificate(fin);
-		return certificate1.getPublicKey();
+	public static PublicKey getPubKeyfromCert(String username) {
+		try {
+			FileInputStream fin = new FileInputStream("Certificates/" + username + ".cer");
+			CertificateFactory f = CertificateFactory.getInstance("X.509");
+			X509Certificate certificate1 = (X509Certificate) f.generateCertificate(fin);
+			return certificate1.getPublicKey();
+		} catch (FileNotFoundException | CertificateException e) {
+			System.out.println("ERROR while retrieving public key from certificate.");
+			return null;
+		}
 	}
 
 	public static boolean checkCredentials(String username, String password) {

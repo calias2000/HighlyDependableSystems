@@ -39,12 +39,13 @@ message SendAmountRequest {
   bytes sender_key = 1;
   bytes receiver_key = 2;
   int32 amount = 3;
-  bytes nonce = 4;
+  int32 nonce = 4;
+  bytes signature = 5;
+  int64 timestamp = 6;
 }
 
 message SendAmountResponse {
   bool ack = 1;
-  bytes nonce = 2;
 }
 
 
