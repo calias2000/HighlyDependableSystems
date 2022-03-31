@@ -15,6 +15,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,7 +61,14 @@ public class DSendAmountIT {
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
-        assertTrue(frontend.sendAmount(request).getAck());
+        SendAmountResponse response = frontend.sendAmount(request);
+        PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
+        String finalString1 = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+        assertTrue(Auxiliar.verifySignature(finalString1, serverPubKey, response.getSignature().toByteArray()));
+        assertEquals(random + 1, response.getNonce());
+        assertTrue(response.getAck());
+        assertTrue(timeMilli < response.getTimestamp());
     }
 
     @Test

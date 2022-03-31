@@ -5,10 +5,7 @@ import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import pt.tecnico.bank.grpc.CheckAccountRequest;
-import pt.tecnico.bank.grpc.OpenAccountRequest;
-import pt.tecnico.bank.grpc.ReceiveAmountRequest;
-import pt.tecnico.bank.grpc.SendAmountRequest;
+import pt.tecnico.bank.grpc.*;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -18,7 +15,9 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Date;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -48,9 +47,17 @@ public class CCheckAccountIT {
         String username = "diogo";
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(username);
         CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+
+        CheckAccountResponse response = frontend.checkAccount(request);
+        List<String> pending = response.getPendentTransfersList();
+
+        PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
+        String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList();
+
+        assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
         // Default account balance
-        assertEquals(500, frontend.checkAccount(request).getBalance());
+        assertEquals(500, response.getBalance());
         // No Pending Transactions yet
-        assertEquals(0, frontend.checkAccount(request).getPendentTransfersCount());
+        assertEquals(0, pending.size());
     }
 }

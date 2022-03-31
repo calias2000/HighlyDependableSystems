@@ -57,7 +57,15 @@ public class FReceiveAmountIT {
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
-        assertTrue(frontend.receiveAmount(request).getAck());
+        ReceiveAmountResponse response = frontend.receiveAmount(request);
+        PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
+        String finalString1 = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+        assertTrue(Auxiliar.verifySignature(finalString1, serverPubKey, response.getSignature().toByteArray()));
+        assertEquals(random + 1, response.getNonce());
+        assertTrue(response.getAck());
+        assertTrue(timeMilli < response.getTimestamp());
+
         CheckAccountRequest request1 = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
 
         // Receiver check account
