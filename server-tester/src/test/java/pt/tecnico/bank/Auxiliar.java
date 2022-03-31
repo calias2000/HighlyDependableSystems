@@ -8,6 +8,8 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 
 public class Auxiliar {
 
@@ -102,6 +104,37 @@ public class Auxiliar {
             return true;
         } catch (FileNotFoundException e) {
             return false;
+        }
+    }
+    public byte[] getSignature(String finalString, PrivateKey privateKey) {
+        try {
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(privateKey);
+            dsaForSign.update(finalString.getBytes());
+            return dsaForSign.sign();
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+            System.out.println("Something went wrong while signing.");
+            return null;
+        }
+    }
+
+    public static boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
+        try {
+            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
+            dsaForVerify.initVerify(publicKey);
+            dsaForVerify.update(finalString.getBytes());
+            return dsaForVerify.verify(signature);
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
+            System.out.println("Signatures don't match.");
+            return false;
+        }
+    }
+
+    public static PublicKey getServerPubKey(byte[] serverPubKey) {
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(serverPubKey));
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e){
+            return null;
         }
     }
 }

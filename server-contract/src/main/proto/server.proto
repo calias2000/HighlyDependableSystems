@@ -24,6 +24,21 @@ message OpenAccountRequest {
 
 message OpenAccountResponse {
   bool ack = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+}
+
+
+
+message CheckAccountRequest {
+  bytes public_key = 1;
+}
+
+message CheckAccountResponse {
+  int32 balance = 1;
+  repeated string pendent_transfers = 2;
+  bytes public_key = 3;
+  bytes signature = 4;
 }
 
 
@@ -39,17 +54,10 @@ message SendAmountRequest {
 
 message SendAmountResponse {
   bool ack = 1;
-}
-
-
-
-message CheckAccountRequest {
-  bytes public_key = 1;
-}
-
-message CheckAccountResponse {
-  int32 balance = 1;
-  repeated string pendent_transfers = 2;
+  int32 nonce = 2;
+  int64 timestamp = 3;
+  bytes public_key = 4;
+  bytes signature = 5;
 }
 
 
@@ -64,6 +72,10 @@ message ReceiveAmountRequest {
 
 message ReceiveAmountResponse {
   bool ack = 1;
+  int32 nonce = 2;
+  int64 timestamp = 3;
+  bytes public_key = 4;
+  bytes signature = 5;
 }
 
 
@@ -74,6 +86,8 @@ message AuditRequest {
 
 message AuditResponse {
   repeated string transfer_history = 1;
+  bytes public_key = 3;
+  bytes signature = 4;
 }
 
 

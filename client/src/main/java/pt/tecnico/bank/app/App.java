@@ -5,6 +5,8 @@ import io.grpc.StatusRuntimeException;
 import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
 import java.security.*;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Date;
 import java.util.List;
 
@@ -25,9 +27,24 @@ public class App {
     }
 
     public void openAccount(PublicKey publicKey, String username) {
-        OpenAccountRequest request = OpenAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).setUsername(username).build();
-        if (frontend.openAccount(request).getAck()) {
-            System.out.println("\nAccount created successfully with username: " + username + "\n");
+
+        try {
+            OpenAccountRequest request = OpenAccountRequest.newBuilder()
+                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                    .setUsername(username)
+                    .build();
+
+            OpenAccountResponse response = frontend.openAccount(request);
+            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+            String finalString = serverPubKey.toString() + response.getAck();
+
+            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && response.getAck()) {
+                System.out.println("\nAccount created successfully with username: " + username + "\n");
+            } else {
+                System.out.println("Be careful, wrong signing from the server.");
+            }
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e){
+            System.out.println("Wrong algorithm.");
         }
     }
 
@@ -35,33 +52,44 @@ public class App {
         try {
             CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
 
-            List<String> pending = frontend.checkAccount(request).getPendentTransfersList();
+            CheckAccountResponse response = frontend.checkAccount(request);
+            List<String> pending = response.getPendentTransfersList();
 
-            if (pending.isEmpty()) {
-                System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nNo pending transactions.\n");
-            } else {
-                System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nPending Transactions:");
-                int i = 1;
-                for (String p : pending) {
-                    System.out.println(i + ") " + p);
-                    i++;
+            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+            String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList().toString();
+
+            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+
+                if (pending.isEmpty()) {
+                    System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nNo pending transactions.\n");
+                } else {
+                    System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nPending Transactions:");
+                    int i = 1;
+                    for (String p : pending) {
+                        System.out.println(i + ") " + p);
+                        i++;
+                    }
+                    System.out.println();
                 }
-                System.out.println();
+
+            } else {
+                System.out.println("Be careful, wrong signing from the server.");
             }
+
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            System.out.println("Wrong algorithm.");
         }
     }
 
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
         try {
-            int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-            long timeMilli = new Date().getTime();
-            String finalString = senderPubK.toString() + amount + random + timeMilli + receiverPubK.toString();
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(senderPrivK);
-            dsaForSign.update(finalString.getBytes());
-            byte[] signature = dsaForSign.sign();
+
+            int random = getSecureRandom();
+            long timeMilli = getTimeMillis();
+            byte [] signature = getSignature(senderPubK.toString() + amount + random + timeMilli + receiverPubK.toString(), senderPrivK);
+
             SendAmountRequest request = SendAmountRequest.newBuilder()
                     .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
                     .setReceiverKey(ByteString.copyFrom(receiverPubK.getEncoded()))
@@ -71,25 +99,28 @@ public class App {
                     .setSignature(ByteString.copyFrom(signature))
                     .build();
 
-            if (frontend.sendAmount(request).getAck()) {
+            SendAmountResponse response = frontend.sendAmount(request);
+            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+            String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()){
                 System.out.println("\nPending transaction, waiting for approval.\n");
+            } else {
+                System.out.println("Be careful, wrong signing from the server.");
             }
+
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
-        } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
-            System.out.println("ERROR while signing.\n");
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            System.out.println("Wrong algorithm.");
         }
     }
 
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
         try {
-            int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-            long timeMilli = new Date().getTime();
-            String finalString = publicKey.toString() + transfer + random + timeMilli;
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(privateKey);
-            dsaForSign.update(finalString.getBytes());
-            byte[] signature = dsaForSign.sign();
+            int random = getSecureRandom();
+            long timeMilli = getTimeMillis();
+            byte [] signature = getSignature(publicKey.toString() + transfer + random + timeMilli, privateKey);
             ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
                     .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                     .setSignature(ByteString.copyFrom(signature))
@@ -97,35 +128,91 @@ public class App {
                     .setNonce(random)
                     .setTimestamp(timeMilli)
                     .build();
-            if (frontend.receiveAmount(request).getAck()) {
+
+            ReceiveAmountResponse response = frontend.receiveAmount(request);
+            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+            String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()){
                 System.out.println("\nTransaction Accepted.\n");
+            } else {
+                System.out.println("Be careful, wrong signing from the server.");
             }
 
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
-        } catch (InvalidKeyException | NoSuchAlgorithmException | SignatureException e) {
-            System.out.println("ERROR while signing.\n");
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            System.out.println("Wrong algorithm.");
         }
     }
 
     public void audit(PublicKey publicKey){
         try {
             AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
-            List<String> history = frontend.audit(request).getTransferHistoryList();
 
-            if (history.isEmpty()) {
-                System.out.println("\nNo history to be shown.\n");
-            } else {
-                System.out.println("\nHistory:");
+            AuditResponse response = frontend.audit(request);
+            List<String> history = response.getTransferHistoryList();
 
-                for (String p : history) {
-                    System.out.println(p);
+            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+            String finalString = serverPubKey.toString() + history.toString();
+
+            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                if (history.isEmpty()) {
+                    System.out.println("\nNo history to be shown.\n");
+                } else {
+                    System.out.println("\nHistory:");
+
+                    for (String p : history) {
+                        System.out.println(p);
+                    }
+
+                    System.out.println();
                 }
-
-                System.out.println();
+            } else {
+                System.out.println("Be careful, wrong signing from the server.");
             }
+
         } catch (StatusRuntimeException e) {
             System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            System.out.println("Wrong algorithm.");
+        }
+    }
+
+    public int getSecureRandom() {
+        try {
+            return SecureRandom.getInstance("SHA1PRNG").nextInt();
+        } catch (NoSuchAlgorithmException e){
+            System.out.println("Wrong Algorithm.");
+            return 0;
+        }
+    }
+
+    public long getTimeMillis() {
+        return new Date().getTime();
+    }
+
+    public byte[] getSignature(String finalString, PrivateKey privateKey) {
+        try {
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(privateKey);
+            dsaForSign.update(finalString.getBytes());
+            return dsaForSign.sign();
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+            System.out.println("Something went wrong while signing.");
+            return null;
+        }
+    }
+
+    public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
+        try {
+            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
+            dsaForVerify.initVerify(publicKey);
+            dsaForVerify.update(finalString.getBytes());
+            return dsaForVerify.verify(signature);
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
+            System.out.println("Signatures don't match.");
+            return false;
         }
     }
 }

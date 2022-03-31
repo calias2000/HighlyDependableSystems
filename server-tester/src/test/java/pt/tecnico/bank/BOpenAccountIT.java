@@ -13,6 +13,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,7 +47,13 @@ public class BOpenAccountIT {
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setUsername(username).build();
-        assertTrue(frontend.openAccount(request).getAck());
+
+        OpenAccountResponse response = frontend.openAccount(request);
+        PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
+        String finalString = serverPubKey.toString() + response.getAck();
+
+        assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
+        assertTrue(response.getAck());
         Thread.sleep(1500);
         // CHECK LOGIN
         assertTrue(Auxiliar.checkCredentials(username, password));

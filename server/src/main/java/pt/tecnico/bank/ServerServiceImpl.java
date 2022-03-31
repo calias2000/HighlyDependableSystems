@@ -1,5 +1,6 @@
 package pt.tecnico.bank;
 
+import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import pt.tecnico.bank.domain.Client;
 import pt.tecnico.bank.domain.Event;
@@ -10,11 +11,11 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import static io.grpc.Status.INVALID_ARGUMENT;
-import static pt.tecnico.bank.ServerMain.clientList;
-import static pt.tecnico.bank.ServerMain.eventList;
+import static pt.tecnico.bank.ServerMain.*;
 
 
 public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
@@ -39,7 +40,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             String username = request.getUsername();
             clientList.put(publicKey, new Client(username));
 
-            OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true).build();
+            String finalString = keyPair.getPublic().toString() + true;
+            byte [] signature = getSignature(finalString);
+
+            OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true)
+                    .setSignature(ByteString.copyFrom(signature))
+                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -59,7 +65,15 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
             }
 
-            CheckAccountResponse response = CheckAccountResponse.newBuilder().setBalance(client.getBalance()).addAllPendentTransfers(pending).build();
+            String finalString = keyPair.getPublic().toString() + client.getBalance() + pending.toString();
+            byte [] signature = getSignature(finalString);
+
+            CheckAccountResponse response = CheckAccountResponse.newBuilder()
+                    .setBalance(client.getBalance())
+                    .addAllPendentTransfers(pending)
+                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                    .setSignature(ByteString.copyFrom(signature))
+                    .build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
 
@@ -77,11 +91,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             long timestamp = request.getTimestamp();
 
             String finalString = keySender.toString() + amount + nonce + timestamp + keyReceiver.toString();
-
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(keySender);
-            dsaForVerify.update(finalString.getBytes());
-            boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
+            byte [] signature = request.getSignature().toByteArray();
             boolean repeatedEvent = false;
 
             for (Event event : eventList){
@@ -91,7 +101,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 }
             }
 
-            if (verifies && !repeatedEvent) {
+            if (verifySignature(finalString, keySender, signature) && !repeatedEvent) {
 
                 eventList.add(new Event(nonce, timestamp));
 
@@ -104,7 +114,20 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                     responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid amount, must be > 0.").asRuntimeException());
                 } else {
                     clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender));
-                    SendAmountResponse response = SendAmountResponse.newBuilder().setAck(true).build();
+
+                    int nonce1 = nonce + 1;
+                    long timestamp1 = new Date().getTime();
+
+                    String finalString1 = keyPair.getPublic().toString() + true + nonce1 + timestamp1;
+                    byte [] signature1 = getSignature(finalString1);
+
+                    SendAmountResponse response = SendAmountResponse.newBuilder()
+                            .setAck(true)
+                            .setNonce(nonce1)
+                            .setTimestamp(timestamp1)
+                            .setSignature(ByteString.copyFrom(signature1))
+                            .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                            .build();
                     responseObserver.onNext(response);
                     responseObserver.onCompleted();
                 }
@@ -112,7 +135,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             System.out.println("Something wrong with the keys!");
         }
     }
@@ -124,10 +147,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             int nonce = request.getNonce();
             long timestamp = request.getTimestamp();
             String finalString = publicKey.toString() + transfer + nonce + timestamp;
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(finalString.getBytes());
-            boolean verifies = dsaForVerify.verify(request.getSignature().toByteArray());
+            byte [] signature = request.getSignature().toByteArray();
+
             boolean repeatedEvent = false;
 
             for (Event event : eventList){
@@ -139,7 +160,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client client = clientList.get(publicKey);
 
-            if (verifies && !repeatedEvent && transfer + 1 <= client.getPending().size()) {
+            if (verifySignature(finalString, publicKey, signature) && !repeatedEvent && transfer + 1 <= client.getPending().size()) {
 
                 eventList.add(new Event(nonce, timestamp));
 
@@ -153,8 +174,20 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
                 client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
 
+                int nonce1 = nonce + 1;
+                long timestamp1 = new Date().getTime();
 
-                ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder().setAck(true).build();
+                String finalString1 = keyPair.getPublic().toString() + true + nonce1 + timestamp1;
+                byte [] signature1 = getSignature(finalString1);
+
+                ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
+                        .setAck(true)
+                        .setNonce(nonce1)
+                        .setTimestamp(timestamp1)
+                        .setSignature(ByteString.copyFrom(signature1))
+                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                        .build();
+
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
 
@@ -162,7 +195,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException | SignatureException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             System.out.println("Something wrong with the keys!");
         }
     }
@@ -183,12 +216,43 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 }
             }
 
-            AuditResponse response = AuditResponse.newBuilder().addAllTransferHistory(history).build();
+            String finalString = keyPair.getPublic().toString() + history.toString();
+            byte [] signature = getSignature(finalString);
+
+            AuditResponse response = AuditResponse.newBuilder()
+                    .addAllTransferHistory(history)
+                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                    .setSignature(ByteString.copyFrom(signature))
+                    .build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             System.out.println("Something wrong with the keys!");
+        }
+    }
+
+    public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
+        try {
+            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
+            dsaForVerify.initVerify(publicKey);
+            dsaForVerify.update(finalString.getBytes());
+            return dsaForVerify.verify(signature);
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
+            System.out.println("Signatures don't match.");
+            return false;
+        }
+    }
+
+    public byte[] getSignature(String finalString) {
+        try {
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(keyPair.getPrivate());
+            dsaForSign.update(finalString.getBytes());
+            return dsaForSign.sign();
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+            System.out.println("Something went wrong while signign.");
+            return null;
         }
     }
 }
