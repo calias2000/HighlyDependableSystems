@@ -11,6 +11,8 @@ import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
+// AUXILIAR FUNCTIONS TO BE USED DURING THE TESTS
+
 public class Auxiliar {
 
     public static void generateStoreandCer(String username, String password) {
@@ -73,6 +75,18 @@ public class Auxiliar {
         }
     }
 
+    public static byte[] getSignature(String finalString, PrivateKey privateKey) {
+        try {
+            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
+            dsaForSign.initSign(privateKey);
+            dsaForSign.update(finalString.getBytes());
+            return dsaForSign.sign();
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+            System.out.println("Something went wrong while signing.");
+            return null;
+        }
+    }
+
     public static PublicKey getPubKeyfromCert(String username) {
         try {
             FileInputStream fin = new FileInputStream("../client/Certificates/" + username + ".cer");
@@ -93,7 +107,6 @@ public class Auxiliar {
             keystore.load(is, passwd);
             return true;
         } catch (IOException | KeyStoreException | NoSuchAlgorithmException | CertificateException e){
-            System.out.println("\nWrong Credentials.");
             return false;
         }
     }
@@ -104,17 +117,6 @@ public class Auxiliar {
             return true;
         } catch (FileNotFoundException e) {
             return false;
-        }
-    }
-    public byte[] getSignature(String finalString, PrivateKey privateKey) {
-        try {
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(privateKey);
-            dsaForSign.update(finalString.getBytes());
-            return dsaForSign.sign();
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
-            System.out.println("Something went wrong while signing.");
-            return null;
         }
     }
 

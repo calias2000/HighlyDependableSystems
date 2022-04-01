@@ -20,6 +20,7 @@ message PingResponse {
 message OpenAccountRequest {
   bytes public_key = 1;
   string username = 2;
+  bytes signature = 3;
 }
 
 message OpenAccountResponse {
@@ -32,6 +33,8 @@ message OpenAccountResponse {
 
 message CheckAccountRequest {
   bytes public_key = 1;
+  bytes my_public_key = 2;
+  bytes signature = 3;
 }
 
 message CheckAccountResponse {
@@ -82,6 +85,8 @@ message ReceiveAmountResponse {
 
 message AuditRequest {
   bytes public_key = 1;
+  bytes my_public_key = 2;
+  bytes signature = 3;
 }
 
 message AuditResponse {

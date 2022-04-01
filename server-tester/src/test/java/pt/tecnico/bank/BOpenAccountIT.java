@@ -1,20 +1,10 @@
 package pt.tecnico.bank;
 
 import com.google.protobuf.ByteString;
-import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.*;
 import pt.tecnico.bank.grpc.*;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.security.*;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,10 +33,16 @@ public class BOpenAccountIT {
         String username = "diogo";
         String password = "password1";
         Auxiliar.generateStoreandCer(username, password);
-        PublicKey publicKey = Auxiliar.getKeyPair(username, password).getPublic();
+        KeyPair keyPair = Auxiliar.getKeyPair(username, password);
+
+        String finalString1 = keyPair.getPublic().toString() + username;
+        byte[] signature = Auxiliar.getSignature(finalString1, keyPair.getPrivate());
+
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
-                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setUsername(username).build();
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setUsername(username)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
@@ -72,10 +68,16 @@ public class BOpenAccountIT {
         String username = "goncalo";
         String password = "password1";
         Auxiliar.generateStoreandCer(username, password);
-        PublicKey publicKey = Auxiliar.getKeyPair(username, password).getPublic();
+        KeyPair keyPair = Auxiliar.getKeyPair(username, password);
+
+        String finalString1 = keyPair.getPublic().toString() + username;
+        byte[] signature = Auxiliar.getSignature(finalString1, keyPair.getPrivate());
+
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
-                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setUsername(username).build();
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setUsername(username)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
@@ -102,10 +104,16 @@ public class BOpenAccountIT {
         String username = "bernardo";
         String password = "password1";
         Auxiliar.generateStoreandCer(username, password);
-        PublicKey publicKey = Auxiliar.getKeyPair(username, password).getPublic();
+        KeyPair keyPair = Auxiliar.getKeyPair(username, password);
+
+        String finalString1 = keyPair.getPublic().toString() + username;
+        byte[] signature = Auxiliar.getSignature(finalString1, keyPair.getPrivate());
+
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
-                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setUsername(username).build();
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setUsername(username)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
@@ -113,7 +121,6 @@ public class BOpenAccountIT {
 
         assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
         assertTrue(response.getAck());
-        // ACCOUNT SUCCESSFULLY CREATED
         Thread.sleep(1500);
         // CHECK LOGIN
         assertTrue(Auxiliar.checkCredentials(username, password));

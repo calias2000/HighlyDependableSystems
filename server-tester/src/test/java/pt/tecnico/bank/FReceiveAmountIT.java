@@ -66,14 +66,30 @@ public class FReceiveAmountIT {
         assertTrue(response.getAck());
         assertTrue(timeMilli < response.getTimestamp());
 
-        CheckAccountRequest request1 = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
+        KeyPair keyPair3 = Auxiliar.getKeyPair("goncalo", "password1");
+
+        String finalString3 = keyPair.getPublic().toString() + keyPair3.getPublic().toString();
+        byte[] signature3 = Auxiliar.getSignature(finalString3, keyPair3.getPrivate());
+        CheckAccountRequest request1 = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature3))
+                .setMyPublicKey(ByteString.copyFrom(keyPair3.getPublic().getEncoded()))
+                .build();
 
         // Receiver check account
         assertEquals(550, frontend.checkAccount(request1).getBalance());
 
         String username2 = "diogo";
         PublicKey publicKey1 = Auxiliar.getPubKeyfromCert(username2);
-        CheckAccountRequest request2 = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey1.getEncoded())).build();
+        KeyPair keyPair1 = Auxiliar.getKeyPair("goncalo", "password1");
+
+        String finalString2 = publicKey1.toString() + keyPair1.getPublic().toString();
+        byte[] signature2 = Auxiliar.getSignature(finalString2, keyPair1.getPrivate());
+        CheckAccountRequest request2 = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
+                .setSignature(ByteString.copyFrom(signature2))
+                .setMyPublicKey(ByteString.copyFrom(keyPair1.getPublic().getEncoded()))
+                .build();
 
         // Sender check account
         assertEquals(450, frontend.checkAccount(request2).getBalance());

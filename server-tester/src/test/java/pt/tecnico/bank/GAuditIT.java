@@ -9,6 +9,7 @@ import pt.tecnico.bank.grpc.AuditResponse;
 import pt.tecnico.bank.grpc.CheckAccountRequest;
 
 import java.security.KeyFactory;
+import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.List;
@@ -34,7 +35,16 @@ public class GAuditIT {
     public void AuditTest() {
         String username = "diogo";
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(username);
-        AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+        KeyPair keyPair = Auxiliar.getKeyPair("goncalo", "password1");
+
+        String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
+        byte[] signature1 = Auxiliar.getSignature(finalString1, keyPair.getPrivate());
+
+        AuditRequest request = AuditRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature1))
+                .build();
 
         AuditResponse response = frontend.audit(request);
         List<String> history = response.getTransferHistoryList();
@@ -48,8 +58,17 @@ public class GAuditIT {
 
         String username2 = "goncalo";
         PublicKey publicKey2 = Auxiliar.getPubKeyfromCert(username2);
-        AuditRequest request2 = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey2.getEncoded())).build();
-        // Default account balance
+        KeyPair keyPair2 = Auxiliar.getKeyPair("goncalo", "password1");
+
+        String finalString2 = publicKey2.toString() + keyPair2.getPublic().toString();
+        byte[] signature2 = Auxiliar.getSignature(finalString2, keyPair2.getPrivate());
+
+        AuditRequest request2 = AuditRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey2.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair2.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature2))
+                .build();
+
         assertEquals("50 from diogo", frontend.audit(request2).getTransferHistory(0));
     }
 }

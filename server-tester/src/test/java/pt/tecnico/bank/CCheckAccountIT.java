@@ -46,7 +46,17 @@ public class CCheckAccountIT {
     public void CheckAccountTest() {
         String username = "diogo";
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(username);
-        CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+
+        KeyPair keyPair = Auxiliar.getKeyPair("goncalo", "password1");
+
+        String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
+        byte[] signature1 = Auxiliar.getSignature(finalString1, keyPair.getPrivate());
+        CheckAccountRequest request = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setSignature(ByteString.copyFrom(signature1))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .build();
+
 
         CheckAccountResponse response = frontend.checkAccount(request);
         List<String> pending = response.getPendentTransfersList();

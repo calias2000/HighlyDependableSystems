@@ -23,53 +23,76 @@ public class App {
 
     public void ping() {
         PingRequest request = PingRequest.newBuilder().setInput("Ping").build();
-        System.out.println("\n" + frontend.ping(request).getOutput() + "\n");
+        PingResponse response = frontend.ping(request);
+        if (response != null) {
+            System.out.println("\n" + response.getOutput() + "\n");
+        }
     }
 
-    public void openAccount(PublicKey publicKey, String username) {
+    public void openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
 
         try {
+
+            String finalString1 = publicKey.toString() + username;
+            byte[] signature = getSignature(finalString1, privateKey);
+
             OpenAccountRequest request = OpenAccountRequest.newBuilder()
                     .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                     .setUsername(username)
+                    .setSignature(ByteString.copyFrom(signature))
                     .build();
 
             OpenAccountResponse response = frontend.openAccount(request);
-            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-            String finalString = serverPubKey.toString() + response.getAck();
 
-            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && response.getAck()) {
-                System.out.println("\nAccount created successfully with username: " + username + "\n");
-            } else {
-                System.out.println("Be careful, wrong signing from the server.");
+            if (response != null) {
+                PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                String finalString = serverPubKey.toString() + response.getAck();
+
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && response.getAck()) {
+                    System.out.println("\nAccount created successfully with username: " + username + "\n");
+                } else {
+                    System.out.println("Be careful, wrong signing from the server.");
+                }
             }
+
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e){
             System.out.println("Wrong algorithm.");
         }
     }
 
-    public void checkAccount(PublicKey publicKey){
+    public void checkAccount(PublicKey publicKey, KeyPair keyPair){
         try {
-            CheckAccountRequest request = CheckAccountRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+
+            String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
+            byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+            CheckAccountRequest request = CheckAccountRequest.newBuilder()
+                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                    .setSignature(ByteString.copyFrom(signature1))
+                    .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                    .build();
 
             CheckAccountResponse response = frontend.checkAccount(request);
-            List<String> pending = response.getPendentTransfersList();
 
-            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-            String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList().toString();
+            if (response != null) {
 
-            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                List<String> pending = response.getPendentTransfersList();
 
-                if (pending.isEmpty()) {
-                    System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nNo pending transactions.\n");
-                } else {
-                    System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nPending Transactions:");
-                    int i = 1;
-                    for (String p : pending) {
-                        System.out.println(i + ") " + p);
-                        i++;
+                PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList().toString();
+
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+
+                    if (pending.isEmpty()) {
+                        System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nNo pending transactions.\n");
+                    } else {
+                        System.out.println("\nAvailable Balance: " + frontend.checkAccount(request).getBalance() + "\n\nPending Transactions:");
+                        int i = 1;
+                        for (String p : pending) {
+                            System.out.println(i + ") " + p);
+                            i++;
+                        }
+                        System.out.println();
                     }
-                    System.out.println();
                 }
 
             } else {
@@ -100,13 +123,16 @@ public class App {
                     .build();
 
             SendAmountResponse response = frontend.sendAmount(request);
-            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-            String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
 
-            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()){
-                System.out.println("\nPending transaction, waiting for approval.\n");
-            } else {
-                System.out.println("Be careful, wrong signing from the server.");
+            if (response != null) {
+                PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()) {
+                    System.out.println("\nPending transaction, waiting for approval.\n");
+                } else {
+                    System.out.println("Be careful, wrong signing from the server.");
+                }
             }
 
         } catch (StatusRuntimeException e) {
@@ -130,13 +156,16 @@ public class App {
                     .build();
 
             ReceiveAmountResponse response = frontend.receiveAmount(request);
-            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-            String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
 
-            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()){
-                System.out.println("\nTransaction Accepted.\n");
-            } else {
-                System.out.println("Be careful, wrong signing from the server.");
+            if (response != null) {
+                PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()) {
+                    System.out.println("\nTransaction Accepted.\n");
+                } else {
+                    System.out.println("Be careful, wrong signing from the server.");
+                }
             }
 
         } catch (StatusRuntimeException e) {
@@ -146,30 +175,41 @@ public class App {
         }
     }
 
-    public void audit(PublicKey publicKey){
+    public void audit(PublicKey publicKey, KeyPair keyPair){
         try {
-            AuditRequest request = AuditRequest.newBuilder().setPublicKey(ByteString.copyFrom(publicKey.getEncoded())).build();
+
+            String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
+            byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+
+            AuditRequest request = AuditRequest.newBuilder()
+                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                    .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                    .setSignature(ByteString.copyFrom(signature1))
+                    .build();
 
             AuditResponse response = frontend.audit(request);
-            List<String> history = response.getTransferHistoryList();
 
-            PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-            String finalString = serverPubKey.toString() + history.toString();
+            if (response != null) {
+                List<String> history = response.getTransferHistoryList();
 
-            if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
-                if (history.isEmpty()) {
-                    System.out.println("\nNo history to be shown.\n");
-                } else {
-                    System.out.println("\nHistory:");
+                PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                String finalString = serverPubKey.toString() + history.toString();
 
-                    for (String p : history) {
-                        System.out.println(p);
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (history.isEmpty()) {
+                        System.out.println("\nNo history to be shown.\n");
+                    } else {
+                        System.out.println("\nHistory:");
+
+                        for (String p : history) {
+                            System.out.println(p);
+                        }
+
+                        System.out.println();
                     }
-
-                    System.out.println();
+                } else {
+                    System.out.println("Be careful, wrong signing from the server.");
                 }
-            } else {
-                System.out.println("Be careful, wrong signing from the server.");
             }
 
         } catch (StatusRuntimeException e) {

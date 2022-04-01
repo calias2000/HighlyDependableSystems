@@ -48,7 +48,7 @@ public class AppMain {
 					else if (!existsAccount(accountUsername)) {
 						generateStoreandCer(accountUsername, accountPassword);
 						keyPair = getKeyPair(accountUsername, accountPassword);
-						app.openAccount(keyPair.getPublic(), accountUsername);
+						app.openAccount(keyPair.getPublic(), accountUsername, keyPair.getPrivate());
 						logout = false;
 					} else {
 						System.out.println("\nAccount already exists.");
@@ -97,7 +97,7 @@ public class AppMain {
 						System.out.print("\nAccount username: ");
 						username = scanner.nextLine();
 						if (existsAccount(username)){
-							app.checkAccount(getPubKeyfromCert(username));
+							app.checkAccount(getPubKeyfromCert(username), keyPair);
 						} else {
 							System.out.println("No account found with that username.");
 						}
@@ -125,7 +125,7 @@ public class AppMain {
 						System.out.print("\nAccount username: ");
 						username = scanner.nextLine();
 						if (existsAccount(username)) {
-							app.audit(getPubKeyfromCert(username));
+							app.audit(getPubKeyfromCert(username), keyPair);
 						} else {
 							System.out.println("No account found with that username.");
 						}

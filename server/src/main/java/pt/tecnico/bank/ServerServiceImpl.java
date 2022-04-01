@@ -38,18 +38,25 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             String username = request.getUsername();
-            clientList.put(publicKey, new Client(username));
+            String finalString1 = publicKey.toString() + username;
+            if (verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
 
-            String finalString = keyPair.getPublic().toString() + true;
-            byte [] signature = getSignature(finalString);
+                clientList.put(publicKey, new Client(username));
 
-            OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true)
-                    .setSignature(ByteString.copyFrom(signature))
-                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
+                String finalString = keyPair.getPublic().toString() + true;
+                byte[] signature = getSignature(finalString);
+
+                OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true)
+                        .setSignature(ByteString.copyFrom(signature))
+                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+            } else {
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
+            }
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
+            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
 
@@ -57,28 +64,37 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         try {
 
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            List<String> pending = new ArrayList<>();
+            PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
 
-            Client client = clientList.get(publicKey);
+            String finalString1 = publicKey.toString() + mypublicKey.toString();
 
-            for (int i = 0; i < client.getPending().size(); i++) {
-                pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+            if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+
+                List<String> pending = new ArrayList<>();
+                Client client = clientList.get(publicKey);
+
+                for (int i = 0; i < client.getPending().size(); i++) {
+                    pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+                }
+
+                String finalString = keyPair.getPublic().toString() + client.getBalance() + pending.toString();
+                byte[] signature = getSignature(finalString);
+
+                CheckAccountResponse response = CheckAccountResponse.newBuilder()
+                        .setBalance(client.getBalance())
+                        .addAllPendentTransfers(pending)
+                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                        .setSignature(ByteString.copyFrom(signature))
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+            } else {
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
             }
 
-            String finalString = keyPair.getPublic().toString() + client.getBalance() + pending.toString();
-            byte [] signature = getSignature(finalString);
-
-            CheckAccountResponse response = CheckAccountResponse.newBuilder()
-                    .setBalance(client.getBalance())
-                    .addAllPendentTransfers(pending)
-                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                    .setSignature(ByteString.copyFrom(signature))
-                    .build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
-
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
+            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
 
@@ -136,7 +152,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
+            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
 
@@ -196,7 +212,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
+            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
 
@@ -204,31 +220,40 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            List<String> history = new ArrayList<>();
+            PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
 
-            Client client = clientList.get(publicKey);
+            String finalString1 = publicKey.toString() + mypublicKey.toString();
 
-            for (int i = 0; i < client.getHistory().size(); i++) {
-                if (client.getHistory().get(i).getValue() < 0) {
-                    history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
-                } else {
-                    history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
+            if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+
+                List<String> history = new ArrayList<>();
+                Client client = clientList.get(publicKey);
+
+                for (int i = 0; i < client.getHistory().size(); i++) {
+                    if (client.getHistory().get(i).getValue() < 0) {
+                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
+                    } else {
+                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
+                    }
                 }
+
+                String finalString = keyPair.getPublic().toString() + history.toString();
+                byte[] signature = getSignature(finalString);
+
+                AuditResponse response = AuditResponse.newBuilder()
+                        .addAllTransferHistory(history)
+                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                        .setSignature(ByteString.copyFrom(signature))
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+            } else {
+                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
             }
 
-            String finalString = keyPair.getPublic().toString() + history.toString();
-            byte [] signature = getSignature(finalString);
-
-            AuditResponse response = AuditResponse.newBuilder()
-                    .addAllTransferHistory(history)
-                    .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                    .setSignature(ByteString.copyFrom(signature))
-                    .build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
-
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            System.out.println("Something wrong with the keys!");
+            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
 
