@@ -93,10 +93,10 @@ public class App {
                         }
                         System.out.println();
                     }
+                } else {
+                    System.out.println("Be careful, wrong signing from the server.");
                 }
 
-            } else {
-                System.out.println("Be careful, wrong signing from the server.");
             }
 
         } catch (StatusRuntimeException e) {
