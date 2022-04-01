@@ -1,6 +1,8 @@
 package pt.tecnico.bank.domain;
 
-public class Event {
+import java.io.Serializable;
+
+public class Event implements Serializable {
 
     private int nonce;
     private long timestamp;

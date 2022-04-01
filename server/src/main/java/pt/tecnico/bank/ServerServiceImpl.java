@@ -7,6 +7,8 @@ import pt.tecnico.bank.domain.Event;
 import pt.tecnico.bank.domain.Transactions;
 import pt.tecnico.bank.grpc.*;
 
+import java.io.*;
+import java.nio.file.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
@@ -49,13 +51,16 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true)
                         .setSignature(ByteString.copyFrom(signature))
                         .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
+
+                saveState();
+
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
 
             } else {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
             }
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
@@ -110,7 +115,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             byte [] signature = request.getSignature().toByteArray();
             boolean repeatedEvent = false;
 
-            for (Event event : eventList){
+            Client clientSender = clientList.get(keySender);
+
+            for (Event event : clientSender.getEventList()){
                 if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
                     repeatedEvent = true;
                     break;
@@ -119,9 +126,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (verifySignature(finalString, keySender, signature) && !repeatedEvent) {
 
-                eventList.add(new Event(nonce, timestamp));
+                clientSender.addEvent(new Event(nonce, timestamp));
 
-                Client clientSender = clientList.get(keySender);
+
                 Client clientReceiver = clientList.get(keyReceiver);
 
                 if (clientSender.getBalance() < amount) {
@@ -144,6 +151,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                             .setSignature(ByteString.copyFrom(signature1))
                             .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                             .build();
+
+                    saveState();
+
                     responseObserver.onNext(response);
                     responseObserver.onCompleted();
                 }
@@ -151,7 +161,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
@@ -167,18 +177,19 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             boolean repeatedEvent = false;
 
-            for (Event event : eventList){
+            Client client = clientList.get(publicKey);
+
+            for (Event event : client.getEventList()){
                 if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
                     repeatedEvent = true;
                     break;
                 }
             }
 
-            Client client = clientList.get(publicKey);
 
             if (verifySignature(finalString, publicKey, signature) && !repeatedEvent && transfer + 1 <= client.getPending().size()) {
 
-                eventList.add(new Event(nonce, timestamp));
+                client.addEvent(new Event(nonce, timestamp));
 
                 Transactions transaction = client.getPending().get(transfer);
                 client.setBalance(client.getBalance() + transaction.getValue());
@@ -204,6 +215,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                         .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                         .build();
 
+                saveState();
+
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
 
@@ -211,7 +224,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
         }
     }
@@ -279,5 +292,27 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             System.out.println("Something went wrong while signign.");
             return null;
         }
+    }
+
+    public void saveState() throws IOException {
+
+        byte[] clientListBytes = mapToBytes();
+
+        Path tmpPath = Paths.get(System.getProperty("user.dir"), "database");
+        Path tmpPathFile = File.createTempFile("atomic", "tmp", new File(tmpPath.toString())).toPath();
+        Files.write(tmpPathFile, clientListBytes, StandardOpenOption.APPEND);
+
+        Files.move(tmpPathFile, Paths.get(System.getProperty("user.dir"), "database", "db.txt"), StandardCopyOption.ATOMIC_MOVE);
+
+    }
+
+    private byte[] mapToBytes() throws IOException {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(byteOut);
+        out.writeObject(clientList);
+        byte[] clientListBytes = byteOut.toByteArray();
+        out.flush();
+        byteOut.close();
+        return clientListBytes;
     }
 }

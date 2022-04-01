@@ -19,7 +19,6 @@ import java.util.*;
 public class ServerMain implements Serializable{
 
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
-	static List<Event> eventList = new ArrayList<>();
 	static KeyPair keyPair = null;
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
@@ -38,7 +37,7 @@ public class ServerMain implements Serializable{
 		}
 
 		try{
-			FileInputStream fileInput = new FileInputStream("db.txt");
+			FileInputStream fileInput = new FileInputStream("database/db.txt");
 
 			ObjectInputStream objectInput = new ObjectInputStream(fileInput);
 
@@ -61,17 +60,6 @@ public class ServerMain implements Serializable{
 			new Thread(() -> {
 				System.out.println("<Press enter to shutdown>");
 				new Scanner(System.in).nextLine();
-
-				try {
-					FileOutputStream myFileOutStream = new FileOutputStream("db.txt");
-					ObjectOutputStream myObjectOutStream = new ObjectOutputStream(myFileOutStream);
-					myObjectOutStream.writeObject(clientList);
-					myObjectOutStream.close();
-					myFileOutStream.close();
-				}
-				catch (IOException e) {
-					e.printStackTrace();
-				}
 
 				server.shutdown();
 			}).start();

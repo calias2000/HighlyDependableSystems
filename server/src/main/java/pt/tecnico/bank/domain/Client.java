@@ -9,12 +9,14 @@ public class Client implements Serializable {
     private int balance;
     private List<Transactions> pending;
     private List<Transactions> history;
+    private List<Event> eventList;
 
     public Client(String username) {
         this.username = username;
         this.balance = 500;
         this.pending = new ArrayList<>();
         this.history = new ArrayList<>();
+        this.eventList = new ArrayList<>();
     }
 
     public String getUsername() { return this.username; }
@@ -33,5 +35,10 @@ public class Client implements Serializable {
     public List<Transactions> getHistory() { return history; }
     public void addHistory (Transactions transaction) {
         this.history.add(transaction);
+    }
+
+    public List<Event> getEventList() { return eventList; }
+    public void addEvent (Event event) {
+        this.eventList.add(event);
     }
 }
