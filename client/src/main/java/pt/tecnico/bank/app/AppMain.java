@@ -20,7 +20,7 @@ public class AppMain {
 		App app = new App(frontend);
 
 		Scanner scanner = new Scanner(System.in);
-		String scanned, receiverUsername, username, accountUsername, accountPassword;
+		String scanned, receiverUsername, username, accountUsername = null, accountPassword;
 		int amount, transactionNumber;
 		KeyPair keyPair = null;
 
@@ -108,13 +108,16 @@ public class AppMain {
 						receiverUsername = scanner.nextLine();
 						System.out.print("Amount: ");
 						amount = Integer.parseInt(scanner.nextLine());
-						if (existsAccount(receiverUsername)) {
-							app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate());
+						if (!receiverUsername.equals(accountUsername)) {
+							if (existsAccount(receiverUsername)) {
+								app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate());
+							} else {
+								System.out.println("No account found with that username.");
+							}
 						} else {
-							System.out.println("No account found with that username.");
+							System.out.println("Can't send money to yourself!");
 						}
 						break;
-
 					case "3":
 						System.out.print("\nTransaction number: ");
 						transactionNumber = Integer.parseInt(scanner.nextLine()) - 1;
