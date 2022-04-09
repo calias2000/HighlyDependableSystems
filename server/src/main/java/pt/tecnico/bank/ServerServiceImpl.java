@@ -3,7 +3,6 @@ package pt.tecnico.bank;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import pt.tecnico.bank.domain.Client;
-import pt.tecnico.bank.domain.Event;
 import pt.tecnico.bank.domain.Transactions;
 import pt.tecnico.bank.grpc.*;
 
@@ -13,7 +12,6 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import static io.grpc.Status.INVALID_ARGUMENT;
@@ -109,24 +107,15 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey keyReceiver = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getReceiverKey().toByteArray()));
             int amount = request.getAmount();
             int nonce = request.getNonce();
-            long timestamp = request.getTimestamp();
 
-            String finalString = keySender.toString() + amount + nonce + timestamp + keyReceiver.toString();
+            String finalString = keySender.toString() + amount + nonce + keyReceiver.toString();
             byte [] signature = request.getSignature().toByteArray();
-            boolean repeatedEvent = false;
 
             Client clientSender = clientList.get(keySender);
 
-            for (Event event : clientSender.getEventList()){
-                if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
-                    repeatedEvent = true;
-                    break;
-                }
-            }
+            if (verifySignature(finalString, keySender, signature) && clientSender.getEventList().get(nonce) == null) {
 
-            if (verifySignature(finalString, keySender, signature) && !repeatedEvent) {
-
-                clientSender.addEvent(new Event(nonce, timestamp));
+                clientSender.addEvent(nonce);
 
 
                 Client clientReceiver = clientList.get(keyReceiver);
@@ -136,18 +125,16 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 } else if (0 >= amount) {
                     responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid amount, must be > 0.").asRuntimeException());
                 } else {
-                    clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender));
+                    clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender, signature));
 
                     int nonce1 = nonce + 1;
-                    long timestamp1 = new Date().getTime();
 
-                    String finalString1 = keyPair.getPublic().toString() + true + nonce1 + timestamp1;
+                    String finalString1 = keyPair.getPublic().toString() + true + nonce1;
                     byte [] signature1 = getSignature(finalString1);
 
                     SendAmountResponse response = SendAmountResponse.newBuilder()
                             .setAck(true)
                             .setNonce(nonce1)
-                            .setTimestamp(timestamp1)
                             .setSignature(ByteString.copyFrom(signature1))
                             .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                             .build();
@@ -171,25 +158,14 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             int transfer = request.getTransfer();
             int nonce = request.getNonce();
-            long timestamp = request.getTimestamp();
-            String finalString = publicKey.toString() + transfer + nonce + timestamp;
+            String finalString = publicKey.toString() + transfer + nonce;
             byte [] signature = request.getSignature().toByteArray();
-
-            boolean repeatedEvent = false;
 
             Client client = clientList.get(publicKey);
 
-            for (Event event : client.getEventList()){
-                if (event.getNonce() == nonce && event.getTimestamp() == timestamp){
-                    repeatedEvent = true;
-                    break;
-                }
-            }
+            if (verifySignature(finalString, publicKey, signature) && client.getEventList().get(nonce) == null && transfer + 1 <= client.getPending().size()) {
 
-
-            if (verifySignature(finalString, publicKey, signature) && !repeatedEvent && transfer + 1 <= client.getPending().size()) {
-
-                client.addEvent(new Event(nonce, timestamp));
+                client.addEvent(nonce);
 
                 Transactions transaction = client.getPending().get(transfer);
                 client.setBalance(client.getBalance() + transaction.getValue());
@@ -202,15 +178,13 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
 
                 int nonce1 = nonce + 1;
-                long timestamp1 = new Date().getTime();
 
-                String finalString1 = keyPair.getPublic().toString() + true + nonce1 + timestamp1;
+                String finalString1 = keyPair.getPublic().toString() + true + nonce1;
                 byte [] signature1 = getSignature(finalString1);
 
                 ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
                         .setAck(true)
                         .setNonce(nonce1)
-                        .setTimestamp(timestamp1)
                         .setSignature(ByteString.copyFrom(signature1))
                         .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                         .build();

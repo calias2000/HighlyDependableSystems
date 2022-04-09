@@ -7,11 +7,18 @@ public class Transactions implements Serializable {
     private String username;
     private int value;
     private PublicKey publicKey;
+    private byte[] signature;
 
     public Transactions(String username, int value, PublicKey publicKey){
         this.username = username;
         this.value = value;
         this.publicKey = publicKey;
+    }
+    public Transactions(String username, int value, PublicKey publicKey, byte[] signature){
+        this.username = username;
+        this.value = value;
+        this.publicKey = publicKey;
+        this.signature = signature;
     }
 
     public String getUsername() {

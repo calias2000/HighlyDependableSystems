@@ -52,13 +52,11 @@ message SendAmountRequest {
   int32 amount = 3;
   int32 nonce = 4;
   bytes signature = 5;
-  int64 timestamp = 6;
 }
 
 message SendAmountResponse {
   bool ack = 1;
   int32 nonce = 2;
-  int64 timestamp = 3;
   bytes public_key = 4;
   bytes signature = 5;
 }
@@ -70,13 +68,11 @@ message ReceiveAmountRequest {
   bytes signature = 2;
   int32 transfer = 3;
   int32 nonce = 4;
-  int64 timestamp = 5;
 }
 
 message ReceiveAmountResponse {
   bool ack = 1;
   int32 nonce = 2;
-  int64 timestamp = 3;
   bytes public_key = 4;
   bytes signature = 5;
 }

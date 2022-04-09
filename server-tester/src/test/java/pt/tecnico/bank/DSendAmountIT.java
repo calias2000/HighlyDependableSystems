@@ -45,8 +45,7 @@ public class DSendAmountIT {
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(receiverUsername);
 
         int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-        long timeMilli = new Date().getTime();
-        String finalString = keyPair.getPublic().toString() + amount + random + timeMilli + publicKey.toString();
+        String finalString = keyPair.getPublic().toString() + amount + random + publicKey.toString();
         Signature dsaForSign = Signature.getInstance("SHA256withRSA");
         dsaForSign.initSign(keyPair.getPrivate());
         dsaForSign.update(finalString.getBytes());
@@ -57,18 +56,16 @@ public class DSendAmountIT {
                 .setReceiverKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setAmount(amount)
                 .setNonce(random)
-                .setTimestamp(timeMilli)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
         SendAmountResponse response = frontend.sendAmount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
-        String finalString1 = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+        String finalString1 = serverPubKey.toString() + response.getAck() + response.getNonce();
 
         assertTrue(Auxiliar.verifySignature(finalString1, serverPubKey, response.getSignature().toByteArray()));
         assertEquals(random + 1, response.getNonce());
         assertTrue(response.getAck());
-        assertTrue(timeMilli < response.getTimestamp());
     }
 
     @Test
@@ -81,8 +78,7 @@ public class DSendAmountIT {
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(receiverUsername);
 
         int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-        long timeMilli = new Date().getTime();
-        String finalString = keyPair.getPublic().toString() + amount + random + timeMilli + publicKey.toString();
+        String finalString = keyPair.getPublic().toString() + amount + random + publicKey.toString();
         Signature dsaForSign = Signature.getInstance("SHA256withRSA");
         dsaForSign.initSign(keyPair.getPrivate());
         dsaForSign.update(finalString.getBytes());
@@ -93,7 +89,6 @@ public class DSendAmountIT {
                 .setReceiverKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setAmount(amount)
                 .setNonce(random)
-                .setTimestamp(timeMilli)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
@@ -110,8 +105,7 @@ public class DSendAmountIT {
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(receiverUsername);
 
         int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-        long timeMilli = new Date().getTime();
-        String finalString = keyPair.getPublic().toString() + amount + random + timeMilli + publicKey.toString();
+        String finalString = keyPair.getPublic().toString() + amount + random + publicKey.toString();
         Signature dsaForSign = Signature.getInstance("SHA256withRSA");
         dsaForSign.initSign(keyPair.getPrivate());
         dsaForSign.update(finalString.getBytes());
@@ -122,7 +116,6 @@ public class DSendAmountIT {
                 .setReceiverKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setAmount(amount)
                 .setNonce(random)
-                .setTimestamp(timeMilli)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
@@ -141,8 +134,7 @@ public class DSendAmountIT {
         PublicKey publicKey = Auxiliar.getPubKeyfromCert(receiverUsername);
 
         int random = SecureRandom.getInstance("SHA1PRNG").nextInt();
-        long timeMilli = new Date().getTime();
-        String finalString = keyPair.getPublic().toString() + amount + random + timeMilli + publicKey.toString();
+        String finalString = keyPair.getPublic().toString() + amount + random + publicKey.toString();
         Signature dsaForSign = Signature.getInstance("SHA256withRSA");
         dsaForSign.initSign(keyPair.getPrivate());
         dsaForSign.update(finalString.getBytes());
@@ -157,7 +149,6 @@ public class DSendAmountIT {
                 .setReceiverKey(ByteString.copyFrom(publicKeyMIM.getEncoded()))
                 .setAmount(amount)
                 .setNonce(random)
-                .setTimestamp(timeMilli)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 

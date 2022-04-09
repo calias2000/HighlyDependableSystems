@@ -42,7 +42,10 @@ public class AppMain {
 					accountUsername = scanner.nextLine();
 					System.out.print("Choose your account password: ");
 					accountPassword = scanner.nextLine();
-					if (accountPassword.length() < 6) {
+					if (accountUsername.equals("")){
+						System.out.println("Username can't be null.");
+					}
+					else if (accountPassword.length() < 6) {
 						System.out.println("Password has to be at least 6 characters long.");
 					}
 					else if (!existsAccount(accountUsername)) {

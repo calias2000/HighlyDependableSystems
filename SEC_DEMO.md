@@ -22,6 +22,12 @@ To do it, just go to the *server* directory and run the following command:
 $ mvn exec:java 
 ```
 
+##### 1.2.1 Run *server* tests
+To run the server tests go to the *server-tester* directory and run the command:
+```sh
+$ mvn verify 
+```
+
 
 ### 1.3. Start the *Client*
 

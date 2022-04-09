@@ -4,12 +4,9 @@ import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import pt.tecnico.bank.domain.Client;
-import pt.tecnico.bank.domain.Event;
 import sun.misc.Signal;
 
 import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;

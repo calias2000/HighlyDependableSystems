@@ -110,15 +110,13 @@ public class App {
         try {
 
             int random = getSecureRandom();
-            long timeMilli = getTimeMillis();
-            byte [] signature = getSignature(senderPubK.toString() + amount + random + timeMilli + receiverPubK.toString(), senderPrivK);
+            byte [] signature = getSignature(senderPubK.toString() + amount + random + receiverPubK.toString(), senderPrivK);
 
             SendAmountRequest request = SendAmountRequest.newBuilder()
                     .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
                     .setReceiverKey(ByteString.copyFrom(receiverPubK.getEncoded()))
                     .setAmount(amount)
                     .setNonce(random)
-                    .setTimestamp(timeMilli)
                     .setSignature(ByteString.copyFrom(signature))
                     .build();
 
@@ -126,9 +124,9 @@ public class App {
 
             if (response != null) {
                 PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce();
 
-                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()) {
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && response.getAck()) {
                     System.out.println("\nPending transaction, waiting for approval.\n");
                 } else {
                     System.out.println("Be careful, wrong signing from the server.");
@@ -145,23 +143,21 @@ public class App {
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
         try {
             int random = getSecureRandom();
-            long timeMilli = getTimeMillis();
-            byte [] signature = getSignature(publicKey.toString() + transfer + random + timeMilli, privateKey);
+            byte [] signature = getSignature(publicKey.toString() + transfer + random, privateKey);
             ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
                     .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                     .setSignature(ByteString.copyFrom(signature))
                     .setTransfer(transfer)
                     .setNonce(random)
-                    .setTimestamp(timeMilli)
                     .build();
 
             ReceiveAmountResponse response = frontend.receiveAmount(request);
 
             if (response != null) {
                 PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce() + response.getTimestamp();
+                String finalString = serverPubKey.toString() + response.getAck() + response.getNonce();
 
-                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && timeMilli < response.getTimestamp() && response.getAck()) {
+                if (verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) && random + 1 == response.getNonce() && response.getAck()) {
                     System.out.println("\nTransaction Accepted.\n");
                 } else {
                     System.out.println("Be careful, wrong signing from the server.");
@@ -226,10 +222,6 @@ public class App {
             System.out.println("Wrong Algorithm.");
             return 0;
         }
-    }
-
-    public long getTimeMillis() {
-        return new Date().getTime();
     }
 
     public byte[] getSignature(String finalString, PrivateKey privateKey) {
