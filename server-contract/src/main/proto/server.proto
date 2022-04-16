@@ -21,12 +21,14 @@ message OpenAccountRequest {
   bytes public_key = 1;
   string username = 2;
   bytes signature = 3;
+  int32 nonce = 4;
 }
 
 message OpenAccountResponse {
   string message = 1;
   bytes public_key = 2;
   bytes signature = 3;
+  int32 nonce = 4;
 }
 
 
@@ -35,6 +37,7 @@ message CheckAccountRequest {
   bytes public_key = 1;
   bytes my_public_key = 2;
   bytes signature = 3;
+  int32 nonce = 4;
 }
 
 message CheckAccountResponse {
@@ -42,6 +45,8 @@ message CheckAccountResponse {
   repeated string pendent_transfers = 2;
   bytes public_key = 3;
   bytes signature = 4;
+  int32 nonce = 5;
+  string message = 6;
 }
 
 
@@ -83,12 +88,15 @@ message AuditRequest {
   bytes public_key = 1;
   bytes my_public_key = 2;
   bytes signature = 3;
+  int32 nonce = 4;
 }
 
 message AuditResponse {
   repeated string transfer_history = 1;
   bytes public_key = 3;
   bytes signature = 4;
+  int32 nonce = 5;
+  string message = 6;
 }
 
 

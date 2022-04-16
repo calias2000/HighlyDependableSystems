@@ -19,12 +19,14 @@ public class ServerFrontend implements AutoCloseable {
     private final List<ManagedChannel> channels;
     private final List<ServerServiceGrpc.ServerServiceStub> stubs;
     private final int quorum;
+    private int byzantine;
 
     public ServerFrontend(int value) {
         this.channels = new ArrayList<>();
         this.stubs = new ArrayList<>();
         int numberChannels = 3 * value + 1;
         this.quorum = 2 * value + 1;
+        this.byzantine = value;
 
         for (int i = 0; i < numberChannels; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -69,14 +71,18 @@ public class ServerFrontend implements AutoCloseable {
             System.out.println("Error");
         }
 
+        Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
+
         synchronized (collector.responses) {
-            for (Object objResponse : collector.responses) {
-                OpenAccountResponse response = (OpenAccountResponse) objResponse;
+            while (iterator.hasNext()) {
+                OpenAccountResponse response = (OpenAccountResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getMessage();
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
-                        collector.responses.remove(objResponse);
+                    String finalString = serverPubKey.toString() + response.getMessage() + response.getNonce();
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                        iterator.remove();
+                        counter++;
                     }
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                     System.out.println("Something wrong with the algorithm!");
@@ -84,7 +90,11 @@ public class ServerFrontend implements AutoCloseable {
             }
         }
 
-        return (OpenAccountResponse) collector.responses.get(0);
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (OpenAccountResponse) collector.responses.get(0);
+        }
     }
 
     public CheckAccountResponse checkAccount(CheckAccountRequest request) {
@@ -108,16 +118,18 @@ public class ServerFrontend implements AutoCloseable {
         }
 
         Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
                 CheckAccountResponse response = (CheckAccountResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList();
+                    String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList() + response.getNonce() + response.getMessage();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
+                        counter++;
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -126,7 +138,11 @@ public class ServerFrontend implements AutoCloseable {
             }
         }
 
-        return (CheckAccountResponse) collector.responses.get(0);
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (CheckAccountResponse) collector.responses.get(0);
+        }
     }
 
     public SendAmountResponse sendAmount(SendAmountRequest request) {
@@ -146,6 +162,7 @@ public class ServerFrontend implements AutoCloseable {
         }
 
         Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -156,6 +173,7 @@ public class ServerFrontend implements AutoCloseable {
 
                     if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
+                        counter++;
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -164,7 +182,11 @@ public class ServerFrontend implements AutoCloseable {
             }
         }
 
-        return (SendAmountResponse) collector.responses.get(0);
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (SendAmountResponse) collector.responses.get(0);
+        }
     }
 
     public ReceiveAmountResponse receiveAmount(ReceiveAmountRequest request) {
@@ -184,6 +206,7 @@ public class ServerFrontend implements AutoCloseable {
         }
 
         Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -194,6 +217,7 @@ public class ServerFrontend implements AutoCloseable {
 
                     if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
+                        counter++;
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -202,7 +226,11 @@ public class ServerFrontend implements AutoCloseable {
             }
         }
 
-        return (ReceiveAmountResponse) collector.responses.get(0);
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (ReceiveAmountResponse) collector.responses.get(0);
+        }
     }
 
     public AuditResponse audit(AuditRequest request) {
@@ -222,16 +250,18 @@ public class ServerFrontend implements AutoCloseable {
         }
 
         Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
                 AuditResponse response = (AuditResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getTransferHistoryList();
+                    String finalString = serverPubKey.toString() + response.getTransferHistoryList() + response.getNonce() + response.getMessage();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
+                        counter++;
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -240,7 +270,11 @@ public class ServerFrontend implements AutoCloseable {
             }
         }
 
-        return (AuditResponse) collector.responses.get(0);
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (AuditResponse) collector.responses.get(0);
+        }
     }
 
     public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){

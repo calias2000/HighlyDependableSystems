@@ -2,6 +2,7 @@ package pt.tecnico.bank.app;
 
 import com.google.protobuf.ByteString;
 import io.grpc.StatusRuntimeException;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslClientHelloHandler;
 import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
 import java.security.*;
@@ -29,36 +30,53 @@ public class App {
         }
     }
 
-    public void openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
+    public boolean openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
 
-        String finalString1 = publicKey.toString() + username;
+        int random = getSecureRandom();
+        String finalString1 = publicKey.toString() + username + random;
         byte[] signature = getSignature(finalString1, privateKey);
 
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setUsername(username)
                 .setSignature(ByteString.copyFrom(signature))
+                .setNonce(random)
                 .build();
 
         OpenAccountResponse response = frontend.openAccount(request);
 
-        System.out.println("\nAccount created successfully with username: " + username + "\n");
-
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+            return false;
+        } else if (response.getMessage().equals("valid")) {
+            System.out.println("\nAccount created successfully with username: " + username + "\n");
+            return true;
+        } else {
+            System.out.println(response.getMessage());
+            return false;
+        }
     }
 
     public void checkAccount(PublicKey publicKey, KeyPair keyPair){
-        try {
 
-            String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
-            byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
-            CheckAccountRequest request = CheckAccountRequest.newBuilder()
-                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                    .setSignature(ByteString.copyFrom(signature1))
-                    .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                    .build();
+        int random = getSecureRandom();
 
-            CheckAccountResponse response = frontend.checkAccount(request);
+        String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
+        byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+        CheckAccountRequest request = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setSignature(ByteString.copyFrom(signature1))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setNonce(random)
+                .build();
 
+        CheckAccountResponse response = frontend.checkAccount(request);
+
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+        }
+        else if (response.getMessage().equals("valid")) {
             List<String> pending = response.getPendentTransfersList();
 
             if (pending.isEmpty()) {
@@ -72,9 +90,8 @@ public class App {
                 }
                 System.out.println();
             }
-
-        } catch (StatusRuntimeException e) {
-            System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } else {
+            System.out.println(response.getMessage());
         }
     }
 
@@ -93,10 +110,13 @@ public class App {
 
         SendAmountResponse response = frontend.sendAmount(request);
 
-        if (response.getMessage().equals("valid")) {
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+        }
+        else if (response.getMessage().equals("valid")) {
             System.out.println("\nPending transaction, waiting for approval.\n");
         } else {
-            System.out.println("\n" + response.getMessage());
+            System.out.println(response.getMessage());
         }
     }
 
@@ -113,7 +133,10 @@ public class App {
 
         ReceiveAmountResponse response = frontend.receiveAmount(request);
 
-        if (response.getMessage().equals("valid")) {
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+        }
+        else if (response.getMessage().equals("valid")) {
             System.out.println("\nTransaction Accepted.\n");
         } else {
             System.out.println("\n" + response.getMessage());
@@ -121,34 +144,36 @@ public class App {
     }
 
     public void audit(PublicKey publicKey, KeyPair keyPair){
-        try {
 
-            String finalString1 = publicKey.toString() + keyPair.getPublic().toString();
-            byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+        int random = getSecureRandom();
+        String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
+        byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
 
-            AuditRequest request = AuditRequest.newBuilder()
-                    .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                    .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                    .setSignature(ByteString.copyFrom(signature1))
-                    .build();
+        AuditRequest request = AuditRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature1))
+                .setNonce(random)
+                .build();
 
-            AuditResponse response = frontend.audit(request);
+        AuditResponse response = frontend.audit(request);
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+        } else if (response.getMessage().equals("valid")) {
             List<String> history = response.getTransferHistoryList();
 
             if (history.isEmpty()) {
                 System.out.println("\nNo history to be shown.\n");
             } else {
                 System.out.println("\nHistory:");
-
                 for (String p : history) {
                     System.out.println(p);
                 }
-
                 System.out.println();
             }
-
-        } catch (StatusRuntimeException e) {
-            System.out.println("WARNING " + e.getStatus().getDescription() + "\n");
+        } else {
+            System.out.println(response.getMessage());
         }
     }
 

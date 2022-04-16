@@ -3,6 +3,7 @@ package pt.tecnico.bank.domain;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 
 public class Client implements Serializable {
@@ -10,14 +11,14 @@ public class Client implements Serializable {
     private int balance;
     private List<Transactions> pending;
     private List<Transactions> history;
-    private HashMap<Integer, String> eventList;
+    private HashSet<Integer> eventList;
 
     public Client(String username) {
         this.username = username;
         this.balance = 500;
         this.pending = new ArrayList<>();
         this.history = new ArrayList<>();
-        this.eventList = new HashMap<>();
+        this.eventList = new HashSet<>();
     }
 
     public String getUsername() { return this.username; }
@@ -38,8 +39,8 @@ public class Client implements Serializable {
         this.history.add(transaction);
     }
 
-    public HashMap<Integer, String> getEventList() { return eventList; }
+    public HashSet<Integer> getEventList() { return eventList; }
     public void addEvent (int nonce) {
-        this.eventList.put(nonce, username);
+        this.eventList.add(nonce);
     }
 }

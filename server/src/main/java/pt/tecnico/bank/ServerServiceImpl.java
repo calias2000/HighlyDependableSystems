@@ -36,14 +36,26 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
     public void openAccount(OpenAccountRequest request, StreamObserver<OpenAccountResponse> responseObserver) {
         String message = "";
+        int nonce = request.getNonce();
+
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             String username = request.getUsername();
-            String finalString1 = publicKey.toString() + username;
-            if (verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
+            String finalString1 = publicKey.toString() + username + nonce;
+            if (clientList.containsKey(publicKey)) {
+                Client client = clientList.get(publicKey);
+                if (client.getEventList().contains(nonce)){
+                    message = "Replay Attack";
+                } else {
+                    message = "Client already exists!";
+                }
+            }
+            else if (verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
 
                 message = "valid";
                 clientList.put(publicKey, new Client(username));
+
+                clientList.get(publicKey).addEvent(nonce);
                 saveHandler.saveState();
 
             } else {
@@ -54,53 +66,83 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             message = "Something wrong with the keys!";
         }
 
-        String finalString = keyPair.getPublic().toString() + message;
+        int nonce1 = nonce + 1;
+
+        String finalString = keyPair.getPublic().toString() + message + nonce1;
         byte[] signature = getSignature(finalString);
 
         OpenAccountResponse response = OpenAccountResponse.newBuilder().setMessage(message)
                 .setSignature(ByteString.copyFrom(signature))
-                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setNonce(nonce1)
+                .build();
 
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
 
     public void checkAccount(CheckAccountRequest request, StreamObserver<CheckAccountResponse> responseObserver) {
+
+        int nonce = request.getNonce();
+        List<String> pending = new ArrayList<>();
+        int balance = 0;
+        String message = "";
+
         try {
 
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
 
-            String finalString1 = publicKey.toString() + mypublicKey.toString();
+            String finalString1 = publicKey.toString() + mypublicKey.toString() + request.getNonce();
 
-            if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+            if (clientList.containsKey(publicKey)) {
 
-                List<String> pending = new ArrayList<>();
                 Client client = clientList.get(publicKey);
 
-                for (int i = 0; i < client.getPending().size(); i++) {
-                    pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+                balance = client.getBalance();
+
+                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
+
+                    if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+
+                        clientList.get(mypublicKey).addEvent(nonce);
+
+                        for (int i = 0; i < client.getPending().size(); i++) {
+                            pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+                        }
+
+                        message = "valid";
+
+                    } else {
+                        message = "Incorrect signature.";
+                    }
+                } else {
+                    message = "Replay attack!";
                 }
-
-                String finalString = keyPair.getPublic().toString() + client.getBalance() + pending;
-                byte[] signature = getSignature(finalString);
-
-                CheckAccountResponse response = CheckAccountResponse.newBuilder()
-                        .setBalance(client.getBalance())
-                        .addAllPendentTransfers(pending)
-                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                        .setSignature(ByteString.copyFrom(signature))
-                        .build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
+                message = "No account found with that username.";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
+            message = "Something wrong with the keys!";
         }
+
+        int nonce1 = nonce + 1;
+
+        String finalString = keyPair.getPublic().toString() + balance + pending + nonce1 + message;
+        byte[] signature = getSignature(finalString);
+
+        CheckAccountResponse response = CheckAccountResponse.newBuilder()
+                .setBalance(balance)
+                .addAllPendentTransfers(pending)
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature))
+                .setNonce(nonce1)
+                .setMessage(message)
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 
     public void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
@@ -118,7 +160,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client clientSender = clientList.get(keySender);
 
-            if (verifySignature(finalString, keySender, signature) && clientSender.getEventList().get(nonce) == null) {
+            if (verifySignature(finalString, keySender, signature) && !clientSender.getEventList().contains(nonce)) {
 
                 clientSender.addEvent(nonce);
 
@@ -173,7 +215,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client client = clientList.get(publicKey);
 
-            if (verifySignature(finalString, publicKey, signature) && client.getEventList().get(nonce) == null && transfer + 1 <= client.getPending().size()) {
+            if (verifySignature(finalString, publicKey, signature) && !client.getEventList().contains(nonce) && transfer + 1 <= client.getPending().size()) {
 
                 message = "valid";
                 client.addEvent(nonce);
@@ -216,43 +258,64 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
     public void audit(AuditRequest request, StreamObserver<AuditResponse> responseObserver) {
 
+        List<String> history = new ArrayList<>();
+        String message = "";
+        int nonce = request.getNonce();
+
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
 
-            String finalString1 = publicKey.toString() + mypublicKey.toString();
+            String finalString1 = publicKey.toString() + mypublicKey.toString() + nonce;
 
-            if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+            if (clientList.containsKey(publicKey)) {
 
-                List<String> history = new ArrayList<>();
                 Client client = clientList.get(publicKey);
 
-                for (int i = 0; i < client.getHistory().size(); i++) {
-                    if (client.getHistory().get(i).getValue() < 0) {
-                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
+                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
+
+                    if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+
+                        clientList.get(mypublicKey).addEvent(nonce);
+
+                        for (int i = 0; i < client.getHistory().size(); i++) {
+                            if (client.getHistory().get(i).getValue() < 0) {
+                                history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
+                            } else {
+                                history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
+                            }
+                        }
+
+                        message = "valid";
+
                     } else {
-                        history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
+                        message = "Incorrect signature.";
                     }
+                } else {
+                    message = "Replay attack!";
                 }
-
-                String finalString = keyPair.getPublic().toString() + history.toString();
-                byte[] signature = getSignature(finalString);
-
-                AuditResponse response = AuditResponse.newBuilder()
-                        .addAllTransferHistory(history)
-                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                        .setSignature(ByteString.copyFrom(signature))
-                        .build();
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
+                message = "No account found with that username.";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
+            message = "Something wrong with the keys!";
         }
+
+        int nonce1 = nonce + 1;
+
+        String finalString = keyPair.getPublic().toString() + history + nonce1 + message;
+        byte[] signature = getSignature(finalString);
+
+        AuditResponse response = AuditResponse.newBuilder()
+                .addAllTransferHistory(history)
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature))
+                .setNonce(nonce1)
+                .setMessage(message)
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 
     public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){

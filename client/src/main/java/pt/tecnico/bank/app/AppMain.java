@@ -51,8 +51,9 @@ public class AppMain {
 					else if (!existsAccount(accountUsername)) {
 						generateStoreandCer(accountUsername, accountPassword);
 						keyPair = getKeyPair(accountUsername, accountPassword);
-						app.openAccount(keyPair.getPublic(), accountUsername, keyPair.getPrivate());
-						logout = false;
+						if (app.openAccount(keyPair.getPublic(), accountUsername, keyPair.getPrivate())) {
+							logout = false;
+						}
 					} else {
 						System.out.println("\nAccount already exists.");
 					}
