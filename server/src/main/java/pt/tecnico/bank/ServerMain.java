@@ -17,24 +17,32 @@ public class ServerMain implements Serializable{
 
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
 	static KeyPair keyPair = null;
+	static SaveHandler saveHandler;
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		System.out.println(ServerMain.class.getSimpleName());
 
-		File keystore = new File("server.jks");
+		int port = Integer.parseInt(args[0]);
+
+		String serverName = "server_" + port;
+
+		File keystore = new File(serverName + "/" + serverName + ".jks");
 
 		if (keystore.exists()){
-			keyPair = getKeyPair();
+			keyPair = getKeyPair(serverName);
 			System.out.println("KeyPair obtained from Server KeyStore.");
 		} else {
 			System.out.println("Creating server KeyStore...");
-			generateStore();
-			Thread.sleep(1500);
-			keyPair = getKeyPair();
+			generateStore(serverName);
+			Thread.sleep(2000);
+			keyPair = getKeyPair(serverName);
+			if (keyPair == null) {
+				return;
+			}
 		}
 
 		try{
-			FileInputStream fileInput = new FileInputStream("database/db.txt");
+			FileInputStream fileInput = new FileInputStream(serverName + "/" + "db.txt");
 
 			ObjectInputStream objectInput = new ObjectInputStream(fileInput);
 
@@ -48,12 +56,14 @@ public class ServerMain implements Serializable{
 			System.out.println("EMPTY DATABASE!!");
 		}
 
+		saveHandler = new SaveHandler(serverName);
+
 		try {
 			final BindableService impl = new ServerServiceImpl();
 
-			Server server = ServerBuilder.forPort(8080).addService(impl).build();
+			Server server = ServerBuilder.forPort(port).addService(impl).build();
 			server.start();
-			System.out.println("Server started");
+			System.out.println("Server started on port " + port);
 			new Thread(() -> {
 				System.out.println("<Press enter to shutdown>");
 				new Scanner(System.in).nextLine();
@@ -71,18 +81,20 @@ public class ServerMain implements Serializable{
 		}
 	}
 
-	public static void generateStore() {
+	public static void generateStore(String serverName) {
+
+		new File(serverName).mkdirs();
 
 		try {
 			String[] keystore_array = new String[14];
 			keystore_array[0] = "keytool";
 			keystore_array[1] = "-genkey";
 			keystore_array[2] = "-alias";
-			keystore_array[3] = "server";
+			keystore_array[3] = serverName;
 			keystore_array[4] = "-keyalg";
 			keystore_array[5] = "RSA";
 			keystore_array[6] = "-keystore";
-			keystore_array[7] = "server.jks";
+			keystore_array[7] = serverName + "/" + serverName + ".jks";
 			keystore_array[8] = "-dname";
 			keystore_array[9] = "CN=mqttserver.ibm.com, OU=ID, O=IBM, L=Hursley, S=Hantes, C=GB";
 			keystore_array[10] = "-storepass";
@@ -93,20 +105,22 @@ public class ServerMain implements Serializable{
 			ProcessBuilder builder = new ProcessBuilder(keystore_array);
 			builder.start();
 
+			new File(serverName + "/" + "db.txt").createNewFile();
+
 		} catch (IOException e) {
 			System.out.println("ERROR while running Keytool commands.");
 		}
 	}
 
-	public static KeyPair getKeyPair() {
+	public static KeyPair getKeyPair(String serverName) {
 		try {
-			FileInputStream is = new FileInputStream("server.jks");
+			FileInputStream is = new FileInputStream(serverName + "/" + serverName + ".jks");
 			String password = "server123";
 			KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
 			char[] passwd = password.toCharArray();
 			keystore.load(is, passwd);
-			Key key = keystore.getKey("server", passwd);
-			Certificate cert = keystore.getCertificate("server");
+			Key key = keystore.getKey(serverName, passwd);
+			Certificate cert = keystore.getCertificate(serverName);
 			PublicKey publicKey = cert.getPublicKey();
 			return new KeyPair(publicKey, (PrivateKey) key);
 		} catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException | CertificateException | IOException e){

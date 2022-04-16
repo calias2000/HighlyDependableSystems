@@ -17,6 +17,7 @@
 	<properties>
 
 		<mainclass>pt.tecnico.bank.ServerMain</mainclass>
+		<server.port>8080</server.port>
 
 	</properties>
 
@@ -81,6 +82,9 @@
 					<!-- to prevent deprecation warning: -->
 					<killAfter>-1</killAfter>
 					<mainClass>${mainclass}</mainClass>
+					<arguments>
+						<argument>${server.port}</argument>
+					</arguments>
 				</configuration>
 			</plugin>
 		</plugins>

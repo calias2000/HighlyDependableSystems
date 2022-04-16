@@ -14,7 +14,7 @@ public class BOpenAccountIT {
 
     @BeforeEach
     public void setUp() {
-        frontend = new ServerFrontend();
+        frontend = new ServerFrontend(0);
     }
 
     @AfterEach
@@ -46,10 +46,10 @@ public class BOpenAccountIT {
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
-        String finalString = serverPubKey.toString() + response.getAck();
+        String finalString = serverPubKey.toString() + response.getMessage();
 
         assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
-        assertTrue(response.getAck());
+        assertEquals(response.getMessage(), "valid");
         Thread.sleep(1500);
         // CHECK LOGIN
         assertTrue(Auxiliar.checkCredentials(username, password));
@@ -81,10 +81,10 @@ public class BOpenAccountIT {
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
-        String finalString = serverPubKey.toString() + response.getAck();
+        String finalString = serverPubKey.toString() + response.getMessage();
 
         assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
-        assertTrue(response.getAck());
+        assertEquals(response.getMessage(), "valid");
         Thread.sleep(1500);
         // CHECK LOGIN
         assertTrue(Auxiliar.checkCredentials(username, password));
@@ -117,10 +117,10 @@ public class BOpenAccountIT {
 
         OpenAccountResponse response = frontend.openAccount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
-        String finalString = serverPubKey.toString() + response.getAck();
+        String finalString = serverPubKey.toString() + response.getMessage();
 
         assertTrue(Auxiliar.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()));
-        assertTrue(response.getAck());
+        assertEquals(response.getMessage(), "valid");
         Thread.sleep(1500);
         // CHECK LOGIN
         assertTrue(Auxiliar.checkCredentials(username, password));

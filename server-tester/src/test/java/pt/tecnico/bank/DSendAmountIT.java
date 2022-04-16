@@ -26,7 +26,7 @@ public class DSendAmountIT {
 
     @BeforeEach
     public void setUp() {
-        frontend = new ServerFrontend();
+        frontend = new ServerFrontend(0);
     }
 
     @AfterEach
@@ -61,11 +61,11 @@ public class DSendAmountIT {
 
         SendAmountResponse response = frontend.sendAmount(request);
         PublicKey serverPubKey = Auxiliar.getServerPubKey(response.getPublicKey().toByteArray());
-        String finalString1 = serverPubKey.toString() + response.getAck() + response.getNonce();
+        String finalString1 = serverPubKey.toString() + response.getMessage() + response.getNonce();
 
         assertTrue(Auxiliar.verifySignature(finalString1, serverPubKey, response.getSignature().toByteArray()));
         assertEquals(random + 1, response.getNonce());
-        assertTrue(response.getAck());
+        assertEquals(response.getMessage(), "valid");
     }
 
     @Test

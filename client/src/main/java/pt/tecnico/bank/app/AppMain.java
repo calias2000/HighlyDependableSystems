@@ -16,7 +16,7 @@ public class AppMain {
 	public static void main(String[] args) {
 
 		// Initialization of the server frontend and App object
-		ServerFrontend frontend = new ServerFrontend();
+		ServerFrontend frontend = new ServerFrontend(1);
 		App app = new App(frontend);
 
 		Scanner scanner = new Scanner(System.in);

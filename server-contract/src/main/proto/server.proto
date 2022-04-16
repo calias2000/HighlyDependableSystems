@@ -24,7 +24,7 @@ message OpenAccountRequest {
 }
 
 message OpenAccountResponse {
-  bool ack = 1;
+  string message = 1;
   bytes public_key = 2;
   bytes signature = 3;
 }
@@ -55,7 +55,7 @@ message SendAmountRequest {
 }
 
 message SendAmountResponse {
-  bool ack = 1;
+  string message = 1;
   int32 nonce = 2;
   bytes public_key = 4;
   bytes signature = 5;
@@ -71,7 +71,7 @@ message ReceiveAmountRequest {
 }
 
 message ReceiveAmountResponse {
-  bool ack = 1;
+  string message = 1;
   int32 nonce = 2;
   bytes public_key = 4;
   bytes signature = 5;

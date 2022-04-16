@@ -35,32 +35,34 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
     }
 
     public void openAccount(OpenAccountRequest request, StreamObserver<OpenAccountResponse> responseObserver) {
+        String message = "";
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
             String username = request.getUsername();
             String finalString1 = publicKey.toString() + username;
             if (verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
 
+                message = "valid";
                 clientList.put(publicKey, new Client(username));
-
-                String finalString = keyPair.getPublic().toString() + true;
-                byte[] signature = getSignature(finalString);
-
-                OpenAccountResponse response = OpenAccountResponse.newBuilder().setAck(true)
-                        .setSignature(ByteString.copyFrom(signature))
-                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
-
-                saveState();
-
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+                saveHandler.saveState();
 
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature.").asRuntimeException());
+                message = "Incorrect signature.";
             }
+
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
-            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
+            message = "Something wrong with the keys!";
         }
+
+        String finalString = keyPair.getPublic().toString() + message;
+        byte[] signature = getSignature(finalString);
+
+        OpenAccountResponse response = OpenAccountResponse.newBuilder().setMessage(message)
+                .setSignature(ByteString.copyFrom(signature))
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded())).build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 
     public void checkAccount(CheckAccountRequest request, StreamObserver<CheckAccountResponse> responseObserver) {
@@ -80,7 +82,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                     pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
                 }
 
-                String finalString = keyPair.getPublic().toString() + client.getBalance() + pending.toString();
+                String finalString = keyPair.getPublic().toString() + client.getBalance() + pending;
                 byte[] signature = getSignature(finalString);
 
                 CheckAccountResponse response = CheckAccountResponse.newBuilder()
@@ -102,11 +104,14 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
     }
 
     public void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
+
+        String message = "";
+        int amount = request.getAmount();
+        int nonce = request.getNonce();
+
         try {
             PublicKey keySender = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getSenderKey().toByteArray()));
             PublicKey keyReceiver = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getReceiverKey().toByteArray()));
-            int amount = request.getAmount();
-            int nonce = request.getNonce();
 
             String finalString = keySender.toString() + amount + nonce + keyReceiver.toString();
             byte [] signature = request.getSignature().toByteArray();
@@ -117,47 +122,52 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 clientSender.addEvent(nonce);
 
-
                 Client clientReceiver = clientList.get(keyReceiver);
 
                 if (clientSender.getBalance() < amount) {
-                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Sender account does not have enough balance.").asRuntimeException());
+                    message = "Sender account does not have enough balance.";
                 } else if (0 >= amount) {
-                    responseObserver.onError(INVALID_ARGUMENT.withDescription("Invalid amount, must be > 0.").asRuntimeException());
+                    message = "Invalid amount, must be > 0.";
                 } else {
+
+                    message = "valid";
+
                     clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender, signature));
 
-                    int nonce1 = nonce + 1;
-
-                    String finalString1 = keyPair.getPublic().toString() + true + nonce1;
-                    byte [] signature1 = getSignature(finalString1);
-
-                    SendAmountResponse response = SendAmountResponse.newBuilder()
-                            .setAck(true)
-                            .setNonce(nonce1)
-                            .setSignature(ByteString.copyFrom(signature1))
-                            .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                            .build();
-
-                    saveState();
-
-                    responseObserver.onNext(response);
-                    responseObserver.onCompleted();
+                    saveHandler.saveState();
                 }
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
+                message = "Incorrect signature, repeated event or incorrect transaction id.";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
-            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
+            message = "Something wrong with the keys!";
         }
+
+        int nonce1 = nonce + 1;
+
+        String finalString1 = keyPair.getPublic().toString() + message + nonce1;
+        byte [] signature1 = getSignature(finalString1);
+
+        SendAmountResponse response = SendAmountResponse.newBuilder()
+                .setMessage(message)
+                .setNonce(nonce1)
+                .setSignature(ByteString.copyFrom(signature1))
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 
     public void receiveAmount(ReceiveAmountRequest request, StreamObserver<ReceiveAmountResponse> responseObserver) {
+
+        String message = "";
+        int transfer = request.getTransfer();
+        int nonce = request.getNonce();
+
         try {
             PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            int transfer = request.getTransfer();
-            int nonce = request.getNonce();
             String finalString = publicKey.toString() + transfer + nonce;
             byte [] signature = request.getSignature().toByteArray();
 
@@ -165,6 +175,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (verifySignature(finalString, publicKey, signature) && client.getEventList().get(nonce) == null && transfer + 1 <= client.getPending().size()) {
 
+                message = "valid";
                 client.addEvent(nonce);
 
                 Transactions transaction = client.getPending().get(transfer);
@@ -177,30 +188,30 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
                 client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
 
-                int nonce1 = nonce + 1;
-
-                String finalString1 = keyPair.getPublic().toString() + true + nonce1;
-                byte [] signature1 = getSignature(finalString1);
-
-                ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
-                        .setAck(true)
-                        .setNonce(nonce1)
-                        .setSignature(ByteString.copyFrom(signature1))
-                        .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                        .build();
-
-                saveState();
-
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+                saveHandler.saveState();
 
             } else {
-                responseObserver.onError(INVALID_ARGUMENT.withDescription("Incorrect signature, repeated event or incorrect transaction id.").asRuntimeException());
+                message = "Incorrect signature, repeated event or incorrect transaction id.";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
-            responseObserver.onError(INVALID_ARGUMENT.withDescription("Something wrong with the keys!").asRuntimeException());
+            message = "Something wrong with the keys!";
         }
+
+        int nonce1 = nonce + 1;
+
+        String finalString1 = keyPair.getPublic().toString() + message + nonce1;
+        byte [] signature1 = getSignature(finalString1);
+
+        ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
+                .setMessage(message)
+                .setNonce(nonce1)
+                .setSignature(ByteString.copyFrom(signature1))
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 
     public void audit(AuditRequest request, StreamObserver<AuditResponse> responseObserver) {
@@ -266,27 +277,5 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             System.out.println("Something went wrong while signign.");
             return null;
         }
-    }
-
-    public void saveState() throws IOException {
-
-        byte[] clientListBytes = mapToBytes();
-
-        Path tmpPath = Paths.get(System.getProperty("user.dir"), "database");
-        Path tmpPathFile = File.createTempFile("atomic", "tmp", new File(tmpPath.toString())).toPath();
-        Files.write(tmpPathFile, clientListBytes, StandardOpenOption.APPEND);
-
-        Files.move(tmpPathFile, Paths.get(System.getProperty("user.dir"), "database", "db.txt"), StandardCopyOption.ATOMIC_MOVE);
-
-    }
-
-    private byte[] mapToBytes() throws IOException {
-        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-        ObjectOutputStream out = new ObjectOutputStream(byteOut);
-        out.writeObject(clientList);
-        byte[] clientListBytes = byteOut.toByteArray();
-        out.flush();
-        byteOut.close();
-        return clientListBytes;
     }
 }

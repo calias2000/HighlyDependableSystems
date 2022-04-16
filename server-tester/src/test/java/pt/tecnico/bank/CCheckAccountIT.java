@@ -27,7 +27,7 @@ public class CCheckAccountIT {
 
     @BeforeEach
     public void setUp() {
-        frontend = new ServerFrontend();
+        frontend = new ServerFrontend(0);
     }
 
     @AfterEach
