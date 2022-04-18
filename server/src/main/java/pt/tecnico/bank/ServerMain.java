@@ -12,17 +12,25 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.util.*;
 
-
 public class ServerMain implements Serializable{
 
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
 	static KeyPair keyPair = null;
 	static SaveHandler saveHandler;
+	static ADEB adeb = null;
+	static String input = "";
+	static HashMap<String, Integer> nonces = null;
+	static Crypto crypto = null;
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		System.out.println(ServerMain.class.getSimpleName());
 
+		crypto = new Crypto();
+
 		int port = Integer.parseInt(args[0]);
+		int byzantine = Integer.parseInt(args[1]);
+
+		adeb = new ADEB(byzantine, "server_" + port);
 
 		String serverName = "server_" + port;
 
@@ -60,8 +68,9 @@ public class ServerMain implements Serializable{
 
 		try {
 			final BindableService impl = new ServerServiceImpl();
+			final BindableService ADEBimpl = new ADEBServiceImpl();
 
-			Server server = ServerBuilder.forPort(port).addService(impl).build();
+			Server server = ServerBuilder.forPort(port).addService(impl).addService(ADEBimpl).build();
 			server.start();
 			System.out.println("Server started on port " + port);
 			new Thread(() -> {

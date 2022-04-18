@@ -7,7 +7,6 @@ import pt.tecnico.bank.domain.Transactions;
 import pt.tecnico.bank.grpc.*;
 
 import java.io.*;
-import java.nio.file.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
@@ -19,6 +18,7 @@ import static pt.tecnico.bank.ServerMain.*;
 
 
 public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
+
 
     public void ping(PingRequest request, StreamObserver<PingResponse> responseObserver) {
         String input = request.getInput();
@@ -39,7 +39,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce = request.getNonce();
 
         try {
-            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             String username = request.getUsername();
             String finalString1 = publicKey.toString() + username + nonce;
             if (clientList.containsKey(publicKey)) {
@@ -50,7 +50,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                     message = "Client already exists!";
                 }
             }
-            else if (verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
+            else if (crypto.verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
 
                 message = "valid";
                 clientList.put(publicKey, new Client(username));
@@ -69,7 +69,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce1 = nonce + 1;
 
         String finalString = keyPair.getPublic().toString() + message + nonce1;
-        byte[] signature = getSignature(finalString);
+        byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         OpenAccountResponse response = OpenAccountResponse.newBuilder().setMessage(message)
                 .setSignature(ByteString.copyFrom(signature))
@@ -103,7 +103,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
 
-                    if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+                    if (crypto.verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
 
                         clientList.get(mypublicKey).addEvent(nonce);
 
@@ -130,7 +130,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce1 = nonce + 1;
 
         String finalString = keyPair.getPublic().toString() + balance + pending + nonce1 + message;
-        byte[] signature = getSignature(finalString);
+        byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         CheckAccountResponse response = CheckAccountResponse.newBuilder()
                 .setBalance(balance)
@@ -160,7 +160,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client clientSender = clientList.get(keySender);
 
-            if (verifySignature(finalString, keySender, signature) && !clientSender.getEventList().contains(nonce)) {
+            if (crypto.verifySignature(finalString, keySender, signature) && !clientSender.getEventList().contains(nonce)) {
+
+                input = finalString;
+                adeb.echo(finalString);
 
                 clientSender.addEvent(nonce);
 
@@ -189,7 +192,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce1 = nonce + 1;
 
         String finalString1 = keyPair.getPublic().toString() + message + nonce1;
-        byte [] signature1 = getSignature(finalString1);
+        byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         SendAmountResponse response = SendAmountResponse.newBuilder()
                 .setMessage(message)
@@ -215,7 +218,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             Client client = clientList.get(publicKey);
 
-            if (verifySignature(finalString, publicKey, signature) && !client.getEventList().contains(nonce) && transfer + 1 <= client.getPending().size()) {
+            if (crypto.verifySignature(finalString, publicKey, signature) && !client.getEventList().contains(nonce) && transfer + 1 <= client.getPending().size()) {
 
                 message = "valid";
                 client.addEvent(nonce);
@@ -243,7 +246,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce1 = nonce + 1;
 
         String finalString1 = keyPair.getPublic().toString() + message + nonce1;
-        byte [] signature1 = getSignature(finalString1);
+        byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
                 .setMessage(message)
@@ -274,7 +277,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
 
-                    if (verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+                    if (crypto.verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
 
                         clientList.get(mypublicKey).addEvent(nonce);
 
@@ -305,7 +308,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce1 = nonce + 1;
 
         String finalString = keyPair.getPublic().toString() + history + nonce1 + message;
-        byte[] signature = getSignature(finalString);
+        byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         AuditResponse response = AuditResponse.newBuilder()
                 .addAllTransferHistory(history)
@@ -316,29 +319,5 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();
-    }
-
-    public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
-        try {
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(finalString.getBytes());
-            return dsaForVerify.verify(signature);
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
-            System.out.println("Signatures don't match.");
-            return false;
-        }
-    }
-
-    public byte[] getSignature(String finalString) {
-        try {
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(keyPair.getPrivate());
-            dsaForSign.update(finalString.getBytes());
-            return dsaForSign.sign();
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
-            System.out.println("Something went wrong while signign.");
-            return null;
-        }
     }
 }

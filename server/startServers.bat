@@ -8,7 +8,7 @@ setlocal ENABLEDELAYEDEXPANSION
 
 for /L %%i in (1,1, %N%) do (
 
-    set CMD="mvn exec:java -Dexec.args=!serverPort!"
+    set CMD="mvn exec:java -Dexec.args="!serverPort! !nByzantineServers!""
     start cmd.exe /k !CMD!
 
     set /a serverPort=serverPort+1

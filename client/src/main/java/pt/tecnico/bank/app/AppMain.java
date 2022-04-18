@@ -1,5 +1,6 @@
 package pt.tecnico.bank.app;
 
+import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.ServerFrontend;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -12,12 +13,13 @@ import java.security.cert.X509Certificate;
 import java.util.*;
 
 public class AppMain {
-	
+
 	public static void main(String[] args) {
 
 		// Initialization of the server frontend and App object
 		ServerFrontend frontend = new ServerFrontend(1);
-		App app = new App(frontend);
+		Crypto crypto = new Crypto();
+		App app = new App(frontend, crypto);
 
 		Scanner scanner = new Scanner(System.in);
 		String scanned, receiverUsername, username, accountUsername = null, accountPassword;

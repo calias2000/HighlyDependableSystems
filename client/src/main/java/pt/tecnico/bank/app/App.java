@@ -3,6 +3,7 @@ package pt.tecnico.bank.app;
 import com.google.protobuf.ByteString;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslClientHelloHandler;
+import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
 import java.security.*;
@@ -14,9 +15,11 @@ import java.util.List;
 public class App {
 
     ServerFrontend frontend;
+    Crypto crypto;
 
-    public App(ServerFrontend frontend) {
+    public App(ServerFrontend frontend, Crypto crypto) {
         this.frontend = frontend;
+        this.crypto = crypto;
     }
 
     // App methods that send requests to the ServerServiceImpl and returns responses to the user
@@ -32,9 +35,9 @@ public class App {
 
     public boolean openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
 
-        int random = getSecureRandom();
+        int random = crypto.getSecureRandom();
         String finalString1 = publicKey.toString() + username + random;
-        byte[] signature = getSignature(finalString1, privateKey);
+        byte[] signature = crypto.getSignature(finalString1, privateKey);
 
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
@@ -59,10 +62,10 @@ public class App {
 
     public void checkAccount(PublicKey publicKey, KeyPair keyPair){
 
-        int random = getSecureRandom();
+        int random = crypto.getSecureRandom();
 
         String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
-        byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+        byte[] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
         CheckAccountRequest request = CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setSignature(ByteString.copyFrom(signature1))
@@ -97,8 +100,8 @@ public class App {
 
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
 
-        int random = getSecureRandom();
-        byte [] signature = getSignature(senderPubK.toString() + amount + random + receiverPubK.toString(), senderPrivK);
+        int random = crypto.getSecureRandom();
+        byte [] signature = crypto.getSignature(senderPubK.toString() + amount + random + receiverPubK.toString(), senderPrivK);
 
         SendAmountRequest request = SendAmountRequest.newBuilder()
                 .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
@@ -122,8 +125,9 @@ public class App {
 
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
 
-        int random = getSecureRandom();
-        byte [] signature = getSignature(publicKey.toString() + transfer + random, privateKey);
+        int random = crypto.getSecureRandom();
+        byte [] signature = crypto.getSignature(publicKey.toString() + transfer + random, privateKey);
+
         ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setSignature(ByteString.copyFrom(signature))
@@ -145,9 +149,9 @@ public class App {
 
     public void audit(PublicKey publicKey, KeyPair keyPair){
 
-        int random = getSecureRandom();
+        int random = crypto.getSecureRandom();
         String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
-        byte[] signature1 = getSignature(finalString1, keyPair.getPrivate());
+        byte[] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         AuditRequest request = AuditRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
@@ -174,39 +178,6 @@ public class App {
             }
         } else {
             System.out.println(response.getMessage());
-        }
-    }
-
-    public int getSecureRandom() {
-        try {
-            return SecureRandom.getInstance("SHA1PRNG").nextInt();
-        } catch (NoSuchAlgorithmException e){
-            System.out.println("Wrong Algorithm.");
-            return 0;
-        }
-    }
-
-    public byte[] getSignature(String finalString, PrivateKey privateKey) {
-        try {
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(privateKey);
-            dsaForSign.update(finalString.getBytes());
-            return dsaForSign.sign();
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
-            System.out.println("Something went wrong while signing.");
-            return null;
-        }
-    }
-
-    public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
-        try {
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(finalString.getBytes());
-            return dsaForVerify.verify(signature);
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
-            System.out.println("Signatures don't match.");
-            return false;
         }
     }
 }
