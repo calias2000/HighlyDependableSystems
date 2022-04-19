@@ -9,6 +9,7 @@ import pt.tecnico.bank.grpc.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -64,12 +65,8 @@ public class App {
 
         int random = crypto.getSecureRandom();
 
-        String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
-        byte[] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
         CheckAccountRequest request = CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setSignature(ByteString.copyFrom(signature1))
-                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setNonce(random)
                 .build();
 
@@ -80,15 +77,15 @@ public class App {
             System.out.println("No quorum achieved!");
         }
         else if (response.getMessage().equals("valid")) {
-            List<String> pending = response.getPendentTransfersList();
+            List<Transaction> pending = response.getTransactionsList();
 
             if (pending.isEmpty()) {
                 System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nNo pending transactions.\n");
             } else {
                 System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nPending Transactions:");
                 int i = 1;
-                for (String p : pending) {
-                    System.out.println(i + ") " + p);
+                for (Transaction transaction : pending) {
+                    System.out.println(i + ") " + transaction.getAmount() + " from " + transaction.getUsername());
                     i++;
                 }
                 System.out.println();
@@ -98,16 +95,25 @@ public class App {
         }
     }
 
-    public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK){
+    public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String username){
 
-        int random = crypto.getSecureRandom();
-        byte [] signature = crypto.getSignature(senderPubK.toString() + amount + random + receiverPubK.toString(), senderPrivK);
+        int nonce = crypto.getSecureRandom();
+        String transactionString = username + amount + senderPubK.toString();
+        byte [] signatureTrans = crypto.getSignature(transactionString, senderPrivK);
+        Transaction transaction = Transaction.newBuilder()
+                .setUsername(username)
+                .setAmount(amount)
+                .setPublicKey(ByteString.copyFrom(senderPubK.getEncoded()))
+                .setSignature(ByteString.copyFrom(signatureTrans))
+                .build();
+
+        String finalString = username + amount + senderPubK + Arrays.toString(signatureTrans) + receiverPubK.toString() + nonce;
+        byte [] signature = crypto.getSignature(finalString, senderPrivK);
 
         SendAmountRequest request = SendAmountRequest.newBuilder()
-                .setSenderKey(ByteString.copyFrom(senderPubK.getEncoded()))
+                .setTransaction(transaction)
                 .setReceiverKey(ByteString.copyFrom(receiverPubK.getEncoded()))
-                .setAmount(amount)
-                .setNonce(random)
+                .setNonce(nonce)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
@@ -150,13 +156,9 @@ public class App {
     public void audit(PublicKey publicKey, KeyPair keyPair){
 
         int random = crypto.getSecureRandom();
-        String finalString1 = publicKey.toString() + keyPair.getPublic().toString() + random;
-        byte[] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         AuditRequest request = AuditRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setSignature(ByteString.copyFrom(signature1))
                 .setNonce(random)
                 .build();
 

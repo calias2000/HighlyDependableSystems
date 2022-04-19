@@ -11,7 +11,9 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static io.grpc.Status.INVALID_ARGUMENT;
 import static pt.tecnico.bank.ServerMain.*;
@@ -87,13 +89,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         List<String> pending = new ArrayList<>();
         int balance = 0;
         String message = "";
+        List<Transaction> transactions = new ArrayList<>();
 
         try {
 
-            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
-
-            String finalString1 = publicKey.toString() + mypublicKey.toString() + request.getNonce();
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
 
             if (clientList.containsKey(publicKey)) {
 
@@ -101,21 +101,20 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 balance = client.getBalance();
 
-                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
+                if (!clientList.get(publicKey).getEventList().contains(nonce)) {
 
-                    if (crypto.verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+                        clientList.get(publicKey).addEvent(nonce);
 
-                        clientList.get(mypublicKey).addEvent(nonce);
-
-                        for (int i = 0; i < client.getPending().size(); i++) {
-                            pending.add(client.getPending().get(i).getValue() + " from " + client.getPending().get(i).getUsername());
+                        for (Transactions transaction : client.getPending()){
+                            transactions.add(Transaction.newBuilder()
+                                    .setUsername(transaction.getUsername())
+                                    .setAmount(transaction.getValue())
+                                    .setPublicKey(ByteString.copyFrom(transaction.getPublicKey().getEncoded()))
+                                    .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                    .build());
                         }
 
                         message = "valid";
-
-                    } else {
-                        message = "Incorrect signature.";
-                    }
                 } else {
                     message = "Replay attack!";
                 }
@@ -129,33 +128,38 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         int nonce1 = nonce + 1;
 
-        String finalString = keyPair.getPublic().toString() + balance + pending + nonce1 + message;
+        String finalString = keyPair.getPublic().toString() + balance + nonce1 + message + transactions;
         byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         CheckAccountResponse response = CheckAccountResponse.newBuilder()
                 .setBalance(balance)
-                .addAllPendentTransfers(pending)
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setSignature(ByteString.copyFrom(signature))
                 .setNonce(nonce1)
                 .setMessage(message)
+                .addAllTransactions(transactions)
                 .build();
 
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
 
-    public void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
+    public synchronized void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
 
         String message = "";
-        int amount = request.getAmount();
+        Transaction transaction = request.getTransaction();
+
+        String username = transaction.getUsername();
+        int amount = transaction.getAmount();
+        byte [] transactionSignature = transaction.getSignature().toByteArray();
+
         int nonce = request.getNonce();
 
         try {
-            PublicKey keySender = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getSenderKey().toByteArray()));
-            PublicKey keyReceiver = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getReceiverKey().toByteArray()));
+            PublicKey keySender = crypto.getPubKeyGrpc(transaction.getPublicKey().toByteArray());
+            PublicKey keyReceiver = crypto.getPubKeyGrpc(request.getReceiverKey().toByteArray());
 
-            String finalString = keySender.toString() + amount + nonce + keyReceiver.toString();
+            String finalString = username + amount + keySender.toString() + Arrays.toString(transactionSignature) + keyReceiver.toString() + nonce;
             byte [] signature = request.getSignature().toByteArray();
 
             Client clientSender = clientList.get(keySender);
@@ -163,7 +167,17 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             if (crypto.verifySignature(finalString, keySender, signature) && !clientSender.getEventList().contains(nonce)) {
 
                 input = finalString;
+                adeb.reset();
+                adeb.deliveredLatch = new CountDownLatch(1);
                 adeb.echo(finalString);
+
+                try {
+                    adeb.deliveredLatch.await();
+                } catch (InterruptedException e) {
+                    System.out.println("Error");
+                }
+
+                System.out.println("ECHO " + adeb.echos + "\nREADY " + adeb.ready);
 
                 clientSender.addEvent(nonce);
 
@@ -177,7 +191,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     message = "valid";
 
-                    clientReceiver.addPending(new Transactions(clientSender.getUsername(), amount, keySender, signature));
+                    clientReceiver.addPending(new Transactions(username, amount, keySender, transactionSignature));
 
                     saveHandler.saveState();
                 }
@@ -266,34 +280,26 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int nonce = request.getNonce();
 
         try {
-            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            PublicKey mypublicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getMyPublicKey().toByteArray()));
-
-            String finalString1 = publicKey.toString() + mypublicKey.toString() + nonce;
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
 
             if (clientList.containsKey(publicKey)) {
 
                 Client client = clientList.get(publicKey);
 
-                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
+                if (!clientList.get(publicKey).getEventList().contains(nonce)) {
 
-                    if (crypto.verifySignature(finalString1, mypublicKey, request.getSignature().toByteArray())) {
+                    clientList.get(publicKey).addEvent(nonce);
 
-                        clientList.get(mypublicKey).addEvent(nonce);
-
-                        for (int i = 0; i < client.getHistory().size(); i++) {
-                            if (client.getHistory().get(i).getValue() < 0) {
-                                history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
-                            } else {
-                                history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
-                            }
+                    for (int i = 0; i < client.getHistory().size(); i++) {
+                        if (client.getHistory().get(i).getValue() < 0) {
+                            history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
+                        } else {
+                            history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
                         }
-
-                        message = "valid";
-
-                    } else {
-                        message = "Incorrect signature.";
                     }
+
+                    message = "valid";
+
                 } else {
                     message = "Replay attack!";
                 }

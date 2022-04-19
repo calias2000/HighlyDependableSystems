@@ -116,7 +116,7 @@ public class AppMain {
 						amount = Integer.parseInt(scanner.nextLine());
 						if (!receiverUsername.equals(accountUsername)) {
 							if (existsAccount(receiverUsername)) {
-								app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate());
+								app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate(), accountUsername);
 							} else {
 								System.out.println("No account found with that username.");
 							}

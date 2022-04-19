@@ -32,29 +32,30 @@ message OpenAccountResponse {
 }
 
 
+message Transaction {
+  string username = 1;
+  int32 amount = 2;
+  bytes public_key = 3;
+  bytes signature = 4;
+}
 
 message CheckAccountRequest {
   bytes public_key = 1;
-  bytes my_public_key = 2;
-  bytes signature = 3;
   int32 nonce = 4;
 }
 
 message CheckAccountResponse {
   int32 balance = 1;
-  repeated string pendent_transfers = 2;
   bytes public_key = 3;
   bytes signature = 4;
   int32 nonce = 5;
   string message = 6;
+  repeated Transaction transactions = 7;
 }
 
-
-
 message SendAmountRequest {
-  bytes sender_key = 1;
+  Transaction transaction = 1;
   bytes receiver_key = 2;
-  int32 amount = 3;
   int32 nonce = 4;
   bytes signature = 5;
 }
@@ -86,8 +87,6 @@ message ReceiveAmountResponse {
 
 message AuditRequest {
   bytes public_key = 1;
-  bytes my_public_key = 2;
-  bytes signature = 3;
   int32 nonce = 4;
 }
 

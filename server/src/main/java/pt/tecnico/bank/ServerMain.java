@@ -21,14 +21,16 @@ public class ServerMain implements Serializable{
 	static String input = "";
 	static HashMap<String, Integer> nonces = null;
 	static Crypto crypto = null;
+	static int byzantine;
+	static int port;
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		System.out.println(ServerMain.class.getSimpleName());
 
 		crypto = new Crypto();
 
-		int port = Integer.parseInt(args[0]);
-		int byzantine = Integer.parseInt(args[1]);
+		port = Integer.parseInt(args[0]);
+		byzantine = Integer.parseInt(args[1]);
 
 		adeb = new ADEB(byzantine, "server_" + port);
 

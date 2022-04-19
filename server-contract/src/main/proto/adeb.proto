@@ -21,8 +21,11 @@ message EchoResponse {
 }
 
 message ReadyRequest {
-  bytes params = 1;
-  bytes signature = 2;
+  bytes signature = 1;
+  bytes server_pubkey = 2;
+  int32 nonce = 3;
+  string server_name = 4;
+  string input = 5;
 }
 
 message ReadyResponse {

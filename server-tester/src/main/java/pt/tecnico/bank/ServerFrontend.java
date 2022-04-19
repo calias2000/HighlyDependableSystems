@@ -125,7 +125,7 @@ public class ServerFrontend implements AutoCloseable {
                 CheckAccountResponse response = (CheckAccountResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getBalance() + response.getPendentTransfersList() + response.getNonce() + response.getMessage();
+                    String finalString = serverPubKey.toString() + response.getBalance() + response.getNonce() + response.getMessage() + response.getTransactionsList();
 
                     if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();

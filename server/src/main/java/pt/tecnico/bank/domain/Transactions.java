@@ -30,4 +30,6 @@ public class Transactions implements Serializable {
     }
 
     public PublicKey getPublicKey() { return this.publicKey; }
+
+    public byte[] getSignature() { return this.signature; }
 }
