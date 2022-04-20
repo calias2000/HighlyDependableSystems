@@ -1,5 +1,7 @@
 package pt.tecnico.bank;
 
+import io.grpc.netty.shaded.io.grpc.netty.InternalNettySocketSupport;
+
 import java.util.HashMap;
 
 public class ADEBInstanceManager {
@@ -25,5 +27,12 @@ public class ADEBInstanceManager {
             instance.deliver();
             instances.remove(input);
         }
+    }
+
+    public void test() {
+        for (String p : instances.keySet()){
+            System.out.println("KEY " + p);
+        }
+        System.out.println("SIZE " + instances.size());
     }
 }

@@ -158,7 +158,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         responseObserver.onCompleted();
     }
 
-    public synchronized void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
+    public void sendAmount(SendAmountRequest request, StreamObserver<SendAmountResponse> responseObserver) {
 
         String message = "";
         Transaction transaction = request.getTransaction();
