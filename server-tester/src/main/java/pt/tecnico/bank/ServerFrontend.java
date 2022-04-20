@@ -9,6 +9,7 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -20,13 +21,15 @@ public class ServerFrontend implements AutoCloseable {
     private final List<ServerServiceGrpc.ServerServiceStub> stubs;
     private final int quorum;
     private int byzantine;
+    private Crypto crypto;
 
-    public ServerFrontend(int value) {
+    public ServerFrontend(int value, Crypto crypto) {
         this.channels = new ArrayList<>();
         this.stubs = new ArrayList<>();
         int numberChannels = 3 * value + 1;
         this.quorum = 2 * value + 1;
         this.byzantine = value;
+        this.crypto = crypto;
 
         for (int i = 0; i < numberChannels; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -78,9 +81,9 @@ public class ServerFrontend implements AutoCloseable {
             while (iterator.hasNext()) {
                 OpenAccountResponse response = (OpenAccountResponse) iterator.next();
                 try {
-                    PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getMessage() + response.getNonce();
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getMessage();
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -124,8 +127,11 @@ public class ServerFrontend implements AutoCloseable {
             while (iterator.hasNext()) {
                 CheckAccountResponse response = (CheckAccountResponse) iterator.next();
                 try {
-                    PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getBalance() + response.getNonce() + response.getMessage() + response.getTransactionsList();
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getBalance()
+                            + response.getWid() + Arrays.toString(response.getPairSign().toByteArray())
+                            + response.getRid() + response.getMessage()
+                            + response.getTransactionsList() + response.getNonce();
 
                     if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
@@ -168,10 +174,10 @@ public class ServerFrontend implements AutoCloseable {
             while (iterator.hasNext()) {
                 SendAmountResponse response = (SendAmountResponse) iterator.next();
                 try {
-                    PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getMessage() + response.getNonce();
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getMessage() + response.getWid();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -213,9 +219,11 @@ public class ServerFrontend implements AutoCloseable {
                 ReceiveAmountResponse response = (ReceiveAmountResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getMessage() + response.getNonce();
+                    String finalString = serverPubKey.toString() + response.getMessage()
+                            + response.getReceiveAmount() + response.getBalance()
+                            + response.getWid() + response.getPairSign();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -257,7 +265,7 @@ public class ServerFrontend implements AutoCloseable {
                 AuditResponse response = (AuditResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getTransferHistoryList() + response.getNonce() + response.getMessage();
+                    String finalString = serverPubKey.toString() + response.getTransactionsList() + response.getNonce() + response.getRid() + response.getMessage();
 
                     if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();

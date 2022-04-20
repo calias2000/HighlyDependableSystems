@@ -38,26 +38,19 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
     public void openAccount(OpenAccountRequest request, StreamObserver<OpenAccountResponse> responseObserver) {
         String message = "";
-        int nonce = request.getNonce();
 
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             String username = request.getUsername();
-            String finalString1 = publicKey.toString() + username + nonce;
-            if (clientList.containsKey(publicKey)) {
-                Client client = clientList.get(publicKey);
-                if (client.getEventList().contains(nonce)){
-                    message = "Replay Attack";
-                } else {
-                    message = "Client already exists!";
-                }
-            }
-            else if (crypto.verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
+            int wid = request.getWid();
+            int balance = request.getBalance();
+            byte [] pair_signature = request.getPairSign().toByteArray();
+
+            String finalString1 = publicKey.toString() + username + wid + balance + Arrays.toString(pair_signature);
+            if (crypto.verifySignature(finalString1, publicKey, request.getSignature().toByteArray())) {
 
                 message = "valid";
-                clientList.put(publicKey, new Client(username));
-
-                clientList.get(publicKey).addEvent(nonce);
+                clientList.put(publicKey, new Client(username, pair_signature));
                 saveHandler.saveState();
 
             } else {
@@ -68,15 +61,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             message = "Something wrong with the keys!";
         }
 
-        int nonce1 = nonce + 1;
-
-        String finalString = keyPair.getPublic().toString() + message + nonce1;
+        String finalString = keyPair.getPublic().toString() + message;
         byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         OpenAccountResponse response = OpenAccountResponse.newBuilder().setMessage(message)
                 .setSignature(ByteString.copyFrom(signature))
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setNonce(nonce1)
                 .build();
 
         responseObserver.onNext(response);
@@ -85,36 +75,50 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
     public void checkAccount(CheckAccountRequest request, StreamObserver<CheckAccountResponse> responseObserver) {
 
-        int nonce = request.getNonce();
-        List<String> pending = new ArrayList<>();
         int balance = 0;
+        int wid = 0;
+
         String message = "";
         List<Transaction> transactions = new ArrayList<>();
+        int rid = request.getRid();
+        int nonce = request.getNonce();
+        byte [] pairSignature = null;
 
         try {
 
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
 
             if (clientList.containsKey(publicKey)) {
 
                 Client client = clientList.get(publicKey);
+                Client me = clientList.get(mypublicKey);
 
                 balance = client.getBalance();
+                wid = client.getWid();
+                pairSignature = me.getPair_signature();
 
                 if (!clientList.get(publicKey).getEventList().contains(nonce)) {
 
-                        clientList.get(publicKey).addEvent(nonce);
+                    clientList.get(publicKey).addEvent(nonce);
 
-                        for (Transactions transaction : client.getPending()){
-                            transactions.add(Transaction.newBuilder()
-                                    .setUsername(transaction.getUsername())
-                                    .setAmount(transaction.getValue())
-                                    .setPublicKey(ByteString.copyFrom(transaction.getPublicKey().getEncoded()))
-                                    .setSignature(ByteString.copyFrom(transaction.getSignature()))
-                                    .build());
-                        }
+                    for (Transactions transaction : client.getPending()){
+                        transactions.add(Transaction.newBuilder()
+                                .setSourceUsername(transaction.getSenderUsername())
+                                .setDestUsername(transaction.getDestUsername())
+                                .setAmount(transaction.getValue())
+                                .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
+                                .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
+                                .setWid(transaction.getWid())
+                                .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                .build());
+                    }
 
-                        message = "valid";
+                    /*me.incrementRid();
+                    rid++;*/
+
+                    message = "valid";
+
                 } else {
                     message = "Replay attack!";
                 }
@@ -128,16 +132,19 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         int nonce1 = nonce + 1;
 
-        String finalString = keyPair.getPublic().toString() + balance + nonce1 + message + transactions;
+        String finalString = keyPair.getPublic().toString() + balance + wid + Arrays.toString(pairSignature) + rid + message + transactions + nonce1;
         byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         CheckAccountResponse response = CheckAccountResponse.newBuilder()
-                .setBalance(balance)
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setSignature(ByteString.copyFrom(signature))
-                .setNonce(nonce1)
+                .setBalance(balance)
+                .setWid(wid)
+                .setPairSign(ByteString.copyFrom(pairSignature))
+                .setRid(rid)
                 .setMessage(message)
                 .addAllTransactions(transactions)
+                .setNonce(nonce1)
+                .setSignature(ByteString.copyFrom(signature))
                 .build();
 
         responseObserver.onNext(response);
@@ -148,23 +155,27 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         String message = "";
         Transaction transaction = request.getTransaction();
+        Client clientSender = null;
 
-        String username = transaction.getUsername();
+        String sourceUsername = transaction.getSourceUsername();
+        String destUsername = transaction.getDestUsername();
         int amount = transaction.getAmount();
         byte [] transactionSignature = transaction.getSignature().toByteArray();
 
-        int nonce = request.getNonce();
+        int wid = transaction.getWid();
+        int balance = request.getBalance();
+        byte [] pairSign = request.getPairSign().toByteArray();
 
         try {
-            PublicKey keySender = crypto.getPubKeyGrpc(transaction.getPublicKey().toByteArray());
-            PublicKey keyReceiver = crypto.getPubKeyGrpc(request.getReceiverKey().toByteArray());
+            PublicKey keySender = crypto.getPubKeyGrpc(transaction.getSource().toByteArray());
+            PublicKey keyReceiver = crypto.getPubKeyGrpc(transaction.getDestination().toByteArray());
 
-            String finalString = username + amount + keySender.toString() + Arrays.toString(transactionSignature) + keyReceiver.toString() + nonce;
+            String finalString = sourceUsername + destUsername + amount + keySender.toString() + keyReceiver.toString() + Arrays.toString(transactionSignature) + wid + balance + Arrays.toString(pairSign);
             byte [] signature = request.getSignature().toByteArray();
 
-            Client clientSender = clientList.get(keySender);
+            clientSender = clientList.get(keySender);
 
-            if (crypto.verifySignature(finalString, keySender, signature) && !clientSender.getEventList().contains(nonce)) {
+            if (crypto.verifySignature(finalString, keySender, signature) && clientSender.getWid() < wid) {
 
                 input = finalString;
                 adeb.reset();
@@ -179,11 +190,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 System.out.println("ECHO " + adeb.echos + "\nREADY " + adeb.ready);
 
-                clientSender.addEvent(nonce);
-
                 Client clientReceiver = clientList.get(keyReceiver);
 
-                if (clientSender.getBalance() < amount) {
+                if (clientSender.getBalance() < amount || clientSender.getBalance() < clientSender.getPendent_balance()) {
                     message = "Sender account does not have enough balance.";
                 } else if (0 >= amount) {
                     message = "Invalid amount, must be > 0.";
@@ -191,7 +200,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     message = "valid";
 
-                    clientReceiver.addPending(new Transactions(username, amount, keySender, transactionSignature));
+                    clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+
+                    clientSender.addPendentBalance(amount);
+                    clientSender.setPairSign(pairSign);
 
                     saveHandler.saveState();
                 }
@@ -203,16 +215,14 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             message = "Something wrong with the keys!";
         }
 
-        int nonce1 = nonce + 1;
-
-        String finalString1 = keyPair.getPublic().toString() + message + nonce1;
+        String finalString1 = keyPair.getPublic().toString() + message + clientSender.getWid();
         byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         SendAmountResponse response = SendAmountResponse.newBuilder()
                 .setMessage(message)
-                .setNonce(nonce1)
-                .setSignature(ByteString.copyFrom(signature1))
+                .setWid(clientSender.getWid())
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature1))
                 .build();
 
         responseObserver.onNext(response);
@@ -223,31 +233,42 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         String message = "";
         int transfer = request.getTransfer();
-        int nonce = request.getNonce();
+        int wid = request.getWid();
+        int amount = 0;
+        int balance = 0;
+        byte [] pairSign = null;
 
         try {
-            PublicKey publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(request.getPublicKey().toByteArray()));
-            String finalString = publicKey.toString() + transfer + nonce;
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            String finalString = publicKey.toString() + transfer + wid;
             byte [] signature = request.getSignature().toByteArray();
 
             Client client = clientList.get(publicKey);
 
-            if (crypto.verifySignature(finalString, publicKey, signature) && !client.getEventList().contains(nonce) && transfer + 1 <= client.getPending().size()) {
+            if (crypto.verifySignature(finalString, publicKey, signature) && client.getWid() < wid && transfer + 1 <= client.getPending().size()) {
 
                 message = "valid";
-                client.addEvent(nonce);
 
                 Transactions transaction = client.getPending().get(transfer);
                 client.setBalance(client.getBalance() + transaction.getValue());
+                amount = transaction.getValue();
 
-                Client client2 = clientList.get(transaction.getPublicKey());
+                Client client2 = clientList.get(transaction.getSourceKey());
                 client2.setBalance(client2.getBalance() - transaction.getValue());
+                client2.addPendentBalance(-transaction.getValue());
 
                 client.removePending(transfer);
-                client.addHistory(new Transactions(transaction.getUsername(), transaction.getValue(), transaction.getPublicKey()));
-                client2.addHistory(new Transactions(client.getUsername(), -transaction.getValue(), publicKey));
+                client.addHistory(transaction);
+
+                transaction.setValue(-transaction.getValue());
+                client2.addHistory(transaction);
 
                 saveHandler.saveState();
+
+                client.incrementWid();
+                wid++;
+                balance = client.getBalance();
+                pairSign = client.getPair_signature();
 
             } else {
                 message = "Incorrect signature, repeated event or incorrect transaction id.";
@@ -257,16 +278,17 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             message = "Something wrong with the keys!";
         }
 
-        int nonce1 = nonce + 1;
-
-        String finalString1 = keyPair.getPublic().toString() + message + nonce1;
+        String finalString1 = keyPair.getPublic().toString() + message + amount + balance + wid + Arrays.toString(pairSign);
         byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
-                .setMessage(message)
-                .setNonce(nonce1)
-                .setSignature(ByteString.copyFrom(signature1))
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setReceiveAmount(amount)
+                .setBalance(balance)
+                .setWid(wid)
+                .setPairSign(ByteString.copyFrom(pairSign))
+                .setMessage(message)
+                .setSignature(ByteString.copyFrom(signature1))
                 .build();
 
         responseObserver.onNext(response);
@@ -275,12 +297,14 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
     public void audit(AuditRequest request, StreamObserver<AuditResponse> responseObserver) {
 
-        List<String> history = new ArrayList<>();
         String message = "";
         int nonce = request.getNonce();
+        int rid = request.getRid();
+        List<Transaction> transactions = new ArrayList<>();
 
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
 
             if (clientList.containsKey(publicKey)) {
 
@@ -290,12 +314,16 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     clientList.get(publicKey).addEvent(nonce);
 
-                    for (int i = 0; i < client.getHistory().size(); i++) {
-                        if (client.getHistory().get(i).getValue() < 0) {
-                            history.add(Math.abs(client.getHistory().get(i).getValue()) + " to " + client.getHistory().get(i).getUsername());
-                        } else {
-                            history.add(Math.abs(client.getHistory().get(i).getValue()) + " from " + client.getHistory().get(i).getUsername());
-                        }
+                    for (Transactions transaction : client.getHistory()){
+                        transactions.add(Transaction.newBuilder()
+                                .setSourceUsername(transaction.getSenderUsername())
+                                .setDestUsername(transaction.getDestUsername())
+                                .setAmount(transaction.getValue())
+                                .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
+                                .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
+                                .setWid(transaction.getWid())
+                                .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                .build());
                     }
 
                     message = "valid";
@@ -313,15 +341,16 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         int nonce1 = nonce + 1;
 
-        String finalString = keyPair.getPublic().toString() + history + nonce1 + message;
+        String finalString = keyPair.getPublic().toString() + transactions + nonce1 + rid + message;
         byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         AuditResponse response = AuditResponse.newBuilder()
-                .addAllTransferHistory(history)
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setSignature(ByteString.copyFrom(signature))
+                .addAllTransactions(transactions)
                 .setNonce(nonce1)
+                .setRid(rid)
                 .setMessage(message)
+                .setSignature(ByteString.copyFrom(signature))
                 .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();

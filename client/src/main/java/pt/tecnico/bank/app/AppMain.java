@@ -17,8 +17,8 @@ public class AppMain {
 	public static void main(String[] args) {
 
 		// Initialization of the server frontend and App object
-		ServerFrontend frontend = new ServerFrontend(1);
 		Crypto crypto = new Crypto();
+		ServerFrontend frontend = new ServerFrontend(1, crypto);
 		App app = new App(frontend, crypto);
 
 		Scanner scanner = new Scanner(System.in);
@@ -116,7 +116,7 @@ public class AppMain {
 						amount = Integer.parseInt(scanner.nextLine());
 						if (!receiverUsername.equals(accountUsername)) {
 							if (existsAccount(receiverUsername)) {
-								app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate(), accountUsername);
+								app.sendAmount(keyPair.getPublic(), getPubKeyfromCert(receiverUsername), amount, keyPair.getPrivate(), accountUsername, receiverUsername);
 							} else {
 								System.out.println("No account found with that username.");
 							}

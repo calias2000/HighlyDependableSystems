@@ -4,32 +4,41 @@ import java.io.Serializable;
 import java.security.PublicKey;
 
 public class Transactions implements Serializable {
-    private String username;
+    private String senderUsername;
+    private String destUsername;
     private int value;
-    private PublicKey publicKey;
+    private PublicKey sourcePublicKey;
+    private PublicKey destinationPublicKey;
+    int wid;
     private byte[] signature;
 
-    public Transactions(String username, int value, PublicKey publicKey){
-        this.username = username;
+    public Transactions(String senderUsername, String destUsername, int value, PublicKey sourcePublicKey, PublicKey destinationPublicKey, int wid, byte[] signature){
+        this.senderUsername = senderUsername;
+        this.destUsername = destUsername;
         this.value = value;
-        this.publicKey = publicKey;
-    }
-    public Transactions(String username, int value, PublicKey publicKey, byte[] signature){
-        this.username = username;
-        this.value = value;
-        this.publicKey = publicKey;
+        this.sourcePublicKey = sourcePublicKey;
+        this.destinationPublicKey = destinationPublicKey;
+        this.wid = wid;
         this.signature = signature;
     }
 
-    public String getUsername() {
-        return username;
+    public String getSenderUsername() {
+        return this.senderUsername;
     }
+
+    public String getDestUsername() { return this.destUsername; }
 
     public int getValue() {
         return value;
     }
 
-    public PublicKey getPublicKey() { return this.publicKey; }
+    public void setValue(int value) { this.value = value; }
+
+    public PublicKey getSourceKey() { return this.sourcePublicKey; }
+
+    public PublicKey getDestKey() { return this.destinationPublicKey; }
+
+    public int getWid() { return this.wid; }
 
     public byte[] getSignature() { return this.signature; }
 }

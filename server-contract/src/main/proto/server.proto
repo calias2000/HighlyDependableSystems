@@ -20,82 +20,108 @@ message PingResponse {
 message OpenAccountRequest {
   bytes public_key = 1;
   string username = 2;
-  bytes signature = 3;
-  int32 nonce = 4;
+  int32 wid = 3;
+  int32 balance = 4;
+  bytes pairSign = 5;
+
+  bytes signature = 6;
 }
 
 message OpenAccountResponse {
   string message = 1;
   bytes public_key = 2;
   bytes signature = 3;
-  int32 nonce = 4;
 }
 
 
 message Transaction {
-  string username = 1;
-  int32 amount = 2;
-  bytes public_key = 3;
-  bytes signature = 4;
+  string sourceUsername = 1;
+  string destUsername = 2;
+  int32 amount = 3;
+  bytes source = 4;
+  bytes destination = 5;
+  int32 wid = 6;
+  bytes signature = 7;
 }
 
 message CheckAccountRequest {
   bytes public_key = 1;
+  bytes my_public_key = 2;
+  int32 rid = 3;
   int32 nonce = 4;
 }
 
 message CheckAccountResponse {
   int32 balance = 1;
-  bytes public_key = 3;
-  bytes signature = 4;
-  int32 nonce = 5;
+  int32 wid = 2;
+  bytes pairSign = 3;
+
+  int32 rid = 4;
+  bytes public_key = 5;
   string message = 6;
+
   repeated Transaction transactions = 7;
+  int32 nonce = 8;
+
+  bytes signature = 9;
 }
 
 message SendAmountRequest {
   Transaction transaction = 1;
-  bytes receiver_key = 2;
-  int32 nonce = 4;
-  bytes signature = 5;
+
+  int32 balance = 2;
+  bytes pairSign = 3;
+
+  bytes signature = 4;
 }
 
 message SendAmountResponse {
   string message = 1;
-  int32 nonce = 2;
-  bytes public_key = 4;
-  bytes signature = 5;
+  bytes public_key = 2;
+  int32 wid = 3;
+  bytes signature = 4;
 }
 
 
 
 message ReceiveAmountRequest {
   bytes public_key = 1;
-  bytes signature = 2;
+
+  int32 wid = 2;
   int32 transfer = 3;
-  int32 nonce = 4;
+  bytes signature = 4;
 }
 
 message ReceiveAmountResponse {
-  string message = 1;
-  int32 nonce = 2;
-  bytes public_key = 4;
-  bytes signature = 5;
+  int32 receive_amount = 1;
+  bytes public_key = 2;
+
+  int32 balance = 3;
+  int32 wid = 4;
+  bytes pairSign = 5;
+
+  string message = 6;
+
+  bytes signature = 7;
 }
 
 
 
 message AuditRequest {
   bytes public_key = 1;
-  int32 nonce = 4;
+  bytes my_public_key = 2;
+  int32 nonce = 3;
+  int32 rid = 4;
 }
 
 message AuditResponse {
-  repeated string transfer_history = 1;
-  bytes public_key = 3;
-  bytes signature = 4;
-  int32 nonce = 5;
-  string message = 6;
+  bytes public_key = 1;
+  repeated Transaction transactions = 2;
+  int32 nonce = 3;
+  int32 rid = 4;
+
+  string message = 5;
+  bytes signature = 6;
 }
 
 

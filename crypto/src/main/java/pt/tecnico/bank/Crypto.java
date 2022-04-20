@@ -29,30 +29,6 @@ public class Crypto {
         }
     }
 
-    public byte[] getSignatureBytes(byte[] finalBytes, PrivateKey privateKey) {
-        try {
-            Signature dsaForSign = Signature.getInstance("SHA256withRSA");
-            dsaForSign.initSign(privateKey);
-            dsaForSign.update(finalBytes);
-            return dsaForSign.sign();
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
-            System.out.println("Something went wrong while signing.");
-            return null;
-        }
-    }
-
-    public boolean verifySignatureBytes(byte[] finalBytes, PublicKey publicKey, byte[] signature){
-        try {
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(finalBytes);
-            return dsaForVerify.verify(signature);
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
-            System.out.println("Signatures don't match.");
-            return false;
-        }
-    }
-
     public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
         try {
             Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
