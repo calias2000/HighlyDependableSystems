@@ -20,19 +20,13 @@ import static pt.tecnico.bank.ServerMain.*;
 
 public class ADEB implements AutoCloseable {
 
-    int byzantine;
+    private int byzantine;
     private final List<ManagedChannel> channels;
     private final List<ADEBServiceGrpc.ADEBServiceStub> stubs;
     private int nServers;
     private String serverName;
-    int echos = 0;
-    int ready = 0;
-    boolean echoFlag = false;
-    boolean readyFlag = false;
-    boolean delivered = false;
     private String input;
-    int quorum;
-    CountDownLatch deliveredLatch = null;
+    private int quorum;
 
     public ADEB(int byzantine, String serverName) {
         this.byzantine = byzantine;
@@ -40,7 +34,7 @@ public class ADEB implements AutoCloseable {
         this.stubs = new ArrayList<>();
         this.nServers = 3*byzantine + 1;
         this.serverName = serverName;
-        this.quorum = 2 * byzantine + 1;
+        this.quorum = (this.nServers + this.byzantine)/2 + 1;
 
         for (int i = 0; i < nServers; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -51,35 +45,28 @@ public class ADEB implements AutoCloseable {
 
     public void echo(String input) {
 
-        if (!echoFlag) {
+        System.out.println("Receiving echos...");
 
-            System.out.println("\nSTARTING ADEB" +
-                    "\nECHOS " + echos +
-                    "\nREADY " + ready);
+        int nonce = crypto.getSecureRandom();
 
-            echoFlag = true;
+        String finalString = input + nonce + serverName;
 
-            this.input = input;
+        EchoRequest request = EchoRequest.newBuilder()
+                .setSignature(ByteString.copyFrom(crypto.getSignature(finalString, keyPair.getPrivate())))
+                .setServerPubkey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setNonce(nonce)
+                .setServerName(serverName)
+                .setInput(input)
+                .build();
 
-            int nonce = crypto.getSecureRandom();
-
-            String finalString = input + nonce + serverName;
-
-            EchoRequest request = EchoRequest.newBuilder()
-                    .setSignature(ByteString.copyFrom(crypto.getSignature(finalString, keyPair.getPrivate())))
-                    .setServerPubkey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                    .setNonce(nonce)
-                    .setServerName(serverName)
-                    .setInput(input)
-                    .build();
-
-            for (ADEBServiceGrpc.ADEBServiceStub stub : this.stubs) {
-                stub.withDeadlineAfter(3, TimeUnit.SECONDS).echo(request, new ObserverADEB<>());
-            }
+        for (ADEBServiceGrpc.ADEBServiceStub stub : this.stubs) {
+            stub.withDeadlineAfter(3, TimeUnit.SECONDS).echo(request, new ObserverADEB<>());
         }
     }
 
-    public void ready() {
+    public void ready(String input) {
+
+        System.out.println("Receiving readys...");
 
         int nonce = crypto.getSecureRandom();
 
@@ -98,17 +85,10 @@ public class ADEB implements AutoCloseable {
         }
     }
 
+    public int getQuorum() { return this.quorum; }
+
     @Override
     public final void close() {
         this.channels.forEach(ManagedChannel::shutdown);
-    }
-
-    public void reset() {
-        this.echos = 0;
-        this.ready = 0;
-        this.echoFlag = false;
-        this.readyFlag = false;
-        this.delivered = false;
-        this.deliveredLatch = null;
     }
 }

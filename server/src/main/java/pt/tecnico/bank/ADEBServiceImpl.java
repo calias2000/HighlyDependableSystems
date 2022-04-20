@@ -10,6 +10,14 @@ import static pt.tecnico.bank.ServerMain.*;
 
 public class ADEBServiceImpl extends ADEBServiceGrpc.ADEBServiceImplBase {
 
+    private ADEBInstanceManager adebInstanceManager;
+    private ADEB adeb;
+
+    public ADEBServiceImpl(ADEB adeb, ADEBInstanceManager adebInstanceManager){
+        this.adeb = adeb;
+        this.adebInstanceManager = adebInstanceManager;
+    }
+
     public synchronized void echo(EchoRequest request, StreamObserver<EchoResponse> responseObserver) {
 
         try {
@@ -17,15 +25,16 @@ public class ADEBServiceImpl extends ADEBServiceGrpc.ADEBServiceImplBase {
             String finalString = request.getInput() + request.getNonce() + request.getServerName();
 
             if (crypto.verifySignature(finalString, otherServerPubKey, request.getSignature().toByteArray())){
-                if (input.equals(request.getInput())){
-                    System.out.println("ECHO Input from server " + request.getServerName() + " is same as mine!");
-                    adeb.echos++;
-                } else {
-                    System.out.println("ECHO Input from server " + request.getServerName() + " is different than mine!");
-                }
-                if (adeb.echos >= adeb.quorum && !adeb.readyFlag) {
-                    adeb.readyFlag = true;
-                    adeb.ready();
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                synchronized (instance) {
+                    instance.addEcho();
+                    System.out.println("Received echo.");
+                    if (instance.getEchos() >= adeb.getQuorum()){
+                        if (!instance.hasSentReady()){
+                            instance.setHasSentReady();
+                            adeb.ready(finalString);
+                        }
+                    }
                 }
             }
 
@@ -41,18 +50,19 @@ public class ADEBServiceImpl extends ADEBServiceGrpc.ADEBServiceImplBase {
             String finalString = request.getInput() + request.getNonce() + request.getServerName();
 
             if (crypto.verifySignature(finalString, otherServerPubKey, request.getSignature().toByteArray())){
-                if (input.equals(request.getInput())){
-                    System.out.println("READY Input from server " + request.getServerName() + " is same as mine!");
-                    adeb.ready++;
-                } else {
-                    System.out.println("READY Input from server " + request.getServerName() + " is different than mine!");
-                }
-                if (adeb.ready > adeb.byzantine && !adeb.readyFlag) {
-                    adeb.readyFlag = true;
-                    adeb.ready();
-                } else if (adeb.ready > 2 * adeb.byzantine && !adeb.delivered) {
-                    adeb.delivered = true;
-                    adeb.deliveredLatch.countDown();
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                synchronized (instance) {
+                    instance.addReady();
+                    System.out.println("Received ready.");
+                    if (instance.getReadys() >= adeb.getQuorum()){
+                        if (!instance.hasSentReady()){
+                            instance.setHasSentReady();
+                            adeb.ready(finalString);
+                        }
+                        if (!instance.hasDelivered()){
+                            adebInstanceManager.deliver(finalString);
+                        }
+                    }
                 }
             }
 

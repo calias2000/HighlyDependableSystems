@@ -18,14 +18,12 @@ public class App {
     ServerFrontend frontend;
     Crypto crypto;
     int balance;
-    int wid;
     int rid;
 
     public App(ServerFrontend frontend, Crypto crypto) {
         this.frontend = frontend;
         this.crypto = crypto;
         this.balance = 500;
-        this.wid = 0;
         this.rid = 0;
     }
 
@@ -42,16 +40,16 @@ public class App {
 
     public boolean openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
 
-        String pairSignatureString = String.valueOf(wid) + balance;
+        String pairSignatureString = String.valueOf(this.balance) + 0;
         byte [] pairSignature = crypto.getSignature(pairSignatureString, privateKey);
 
-        String finalString1 = publicKey.toString() + username + this.wid + this.balance + Arrays.toString(pairSignature);
+        String finalString1 = publicKey.toString() + username + 0 + this.balance + Arrays.toString(pairSignature);
         byte[] signature = crypto.getSignature(finalString1, privateKey);
 
         OpenAccountRequest request = OpenAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setUsername(username)
-                .setWid(this.wid)
+                .setWid(0)
                 .setBalance(this.balance)
                 .setPairSign(ByteString.copyFrom(pairSignature))
                 .setSignature(ByteString.copyFrom(signature))
@@ -78,7 +76,7 @@ public class App {
         CheckAccountRequest request = CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setRid(this.rid)
+                .setRid(this.rid + 1)
                 .setNonce(nonce)
                 .build();
 
@@ -89,6 +87,7 @@ public class App {
         }
         else if (response.getMessage().equals("valid")) {
 
+            // INCREMENT RID
             this.rid++;
             List<Transaction> pending = response.getTransactionsList();
 
@@ -110,7 +109,21 @@ public class App {
 
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername){
 
-        String transactionString = sourceUsername + destUsername + amount + senderPubK.toString() + receiverPubK.toString() + this.wid;
+        int nonce = crypto.getSecureRandom();
+
+        CheckAccountResponse response1 = frontend.checkAccount(CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(senderPubK.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(senderPubK.getEncoded()))
+                .setRid(this.rid + 1)
+                .setNonce(nonce)
+                .build());
+
+        this.rid++;
+
+        int new_wid = response1.getWid() + 1;
+        int new_balance = response1.getBalance() - amount;
+
+        String transactionString = sourceUsername + destUsername + amount + senderPubK.toString() + receiverPubK.toString() + new_wid;
         byte [] signatureTrans = crypto.getSignature(transactionString, senderPrivK);
         Transaction transaction = Transaction.newBuilder()
                 .setSourceUsername(sourceUsername)
@@ -118,19 +131,22 @@ public class App {
                 .setAmount(amount)
                 .setSource(ByteString.copyFrom(senderPubK.getEncoded()))
                 .setDestination(ByteString.copyFrom(receiverPubK.getEncoded()))
-                .setWid(this.wid)
+                .setWid(new_wid)
                 .setSignature(ByteString.copyFrom(signatureTrans))
                 .build();
 
-        String pairSignatureString = String.valueOf(wid) + balance;
+        String pairSignatureString = String.valueOf(new_balance) + new_wid;
         byte [] pairSignature = crypto.getSignature(pairSignatureString, senderPrivK);
 
-        String finalString = sourceUsername + destUsername + amount + senderPubK +  receiverPubK + Arrays.toString(signatureTrans) + this.wid + this.balance + Arrays.toString(pairSignature);
+        String finalString = sourceUsername + destUsername + amount
+                + senderPubK +  receiverPubK + Arrays.toString(signatureTrans)
+                + new_wid + Arrays.toString(pairSignature) + new_balance;
+
         byte [] signature = crypto.getSignature(finalString, senderPrivK);
 
         SendAmountRequest request = SendAmountRequest.newBuilder()
                 .setTransaction(transaction)
-                .setBalance(this.balance)
+                .setNewBalance(new_balance)
                 .setPairSign(ByteString.copyFrom(pairSignature))
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
@@ -149,11 +165,30 @@ public class App {
 
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
 
-        byte [] signature = crypto.getSignature(publicKey.toString() + transfer + this.wid, privateKey);
+        int nonce = crypto.getSecureRandom();
+
+        CheckAccountResponse response1 = frontend.checkAccount(CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setRid(this.rid + 1)
+                .setNonce(nonce)
+                .build());
+
+        int future_balance = response1.getBalance() + response1.getTransactions(transfer).getAmount();
+
+        this.rid++;
+
+        int new_wid = response1.getWid() + 1;
+        String pairSignString = String.valueOf(future_balance) + new_wid;
+        byte [] pairSign = crypto.getSignature(pairSignString, privateKey);
+
+        byte [] signature = crypto.getSignature(publicKey.toString() + future_balance + new_wid + Arrays.toString(pairSign) + transfer, privateKey);
 
         ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setWid(this.wid)
+                .setFutureBalance(future_balance)
+                .setWid(new_wid)
+                .setPairSign(ByteString.copyFrom(pairSign))
                 .setTransfer(transfer)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
@@ -186,6 +221,7 @@ public class App {
         if (response == null) {
             System.out.println("No quorum achieved!");
         } else if (response.getMessage().equals("valid")) {
+            this.rid++;
             List<Transaction> history = response.getTransactionsList();
 
             if (history.isEmpty()) {

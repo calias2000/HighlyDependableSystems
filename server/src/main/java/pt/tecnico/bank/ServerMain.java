@@ -17,8 +17,6 @@ public class ServerMain implements Serializable{
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
 	static KeyPair keyPair = null;
 	static SaveHandler saveHandler;
-	static ADEB adeb = null;
-	static String input = "";
 	static HashMap<String, Integer> nonces = null;
 	static Crypto crypto = null;
 	static int byzantine;
@@ -31,8 +29,6 @@ public class ServerMain implements Serializable{
 
 		port = Integer.parseInt(args[0]);
 		byzantine = Integer.parseInt(args[1]);
-
-		adeb = new ADEB(byzantine, "server_" + port);
 
 		String serverName = "server_" + port;
 
@@ -69,8 +65,11 @@ public class ServerMain implements Serializable{
 		saveHandler = new SaveHandler(serverName);
 
 		try {
-			final BindableService impl = new ServerServiceImpl();
-			final BindableService ADEBimpl = new ADEBServiceImpl();
+
+			ADEBInstanceManager manager = new ADEBInstanceManager();
+			ADEB adeb = new ADEB(byzantine, "server_" + port);
+			final BindableService impl = new ServerServiceImpl(adeb, manager);
+			final BindableService ADEBimpl = new ADEBServiceImpl(adeb, manager);
 
 			Server server = ServerBuilder.forPort(port).addService(impl).addService(ADEBimpl).build();
 			server.start();

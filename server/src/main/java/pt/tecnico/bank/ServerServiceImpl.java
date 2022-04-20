@@ -9,7 +9,6 @@ import pt.tecnico.bank.grpc.*;
 import java.io.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -20,6 +19,14 @@ import static pt.tecnico.bank.ServerMain.*;
 
 
 public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
+
+    private ADEBInstanceManager adebInstanceManager;
+    private ADEB adeb;
+
+    public ServerServiceImpl(ADEB adeb, ADEBInstanceManager adebInstanceManager){
+        this.adebInstanceManager = adebInstanceManager;
+        this.adeb = adeb;
+    }
 
 
     public void ping(PingRequest request, StreamObserver<PingResponse> responseObserver) {
@@ -64,7 +71,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         String finalString = keyPair.getPublic().toString() + message;
         byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
-        OpenAccountResponse response = OpenAccountResponse.newBuilder().setMessage(message)
+        OpenAccountResponse response = OpenAccountResponse.newBuilder()
+                .setMessage(message)
                 .setSignature(ByteString.copyFrom(signature))
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .build();
@@ -82,7 +90,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         List<Transaction> transactions = new ArrayList<>();
         int rid = request.getRid();
         int nonce = request.getNonce();
-        byte [] pairSignature = null;
+        byte [] pairSignature = new byte[0];
 
         try {
 
@@ -96,11 +104,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 balance = client.getBalance();
                 wid = client.getWid();
-                pairSignature = me.getPair_signature();
+                pairSignature = client.getPair_signature();
 
-                if (!clientList.get(publicKey).getEventList().contains(nonce)) {
+                if (!clientList.get(mypublicKey).getEventList().contains(nonce) && rid > me.getRid()) {
 
-                    clientList.get(publicKey).addEvent(nonce);
+                    clientList.get(mypublicKey).addEvent(nonce);
 
                     for (Transactions transaction : client.getPending()){
                         transactions.add(Transaction.newBuilder()
@@ -114,8 +122,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                                 .build());
                     }
 
-                    /*me.incrementRid();
-                    rid++;*/
+                    me.setRid(rid);
 
                     message = "valid";
 
@@ -162,65 +169,66 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int amount = transaction.getAmount();
         byte [] transactionSignature = transaction.getSignature().toByteArray();
 
+        int new_balance = request.getNewBalance();
         int wid = transaction.getWid();
-        int balance = request.getBalance();
         byte [] pairSign = request.getPairSign().toByteArray();
 
         try {
             PublicKey keySender = crypto.getPubKeyGrpc(transaction.getSource().toByteArray());
             PublicKey keyReceiver = crypto.getPubKeyGrpc(transaction.getDestination().toByteArray());
 
-            String finalString = sourceUsername + destUsername + amount + keySender.toString() + keyReceiver.toString() + Arrays.toString(transactionSignature) + wid + balance + Arrays.toString(pairSign);
+            String finalString = sourceUsername + destUsername + amount
+                    + keySender.toString() + keyReceiver.toString()
+                    + Arrays.toString(transactionSignature) + wid + Arrays.toString(pairSign) + new_balance;
+
             byte [] signature = request.getSignature().toByteArray();
 
             clientSender = clientList.get(keySender);
 
-            if (crypto.verifySignature(finalString, keySender, signature) && clientSender.getWid() < wid) {
+            if (crypto.verifySignature(finalString, keySender, signature)) {
 
-                input = finalString;
-                adeb.reset();
-                adeb.deliveredLatch = new CountDownLatch(1);
+                System.out.println("ADDEB STARTING");
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
                 adeb.echo(finalString);
+                instance.await();
+                System.out.println("ADEB finished!");
 
-                try {
-                    adeb.deliveredLatch.await();
-                } catch (InterruptedException e) {
-                    System.out.println("Error");
-                }
+                if (clientSender.getWid() < wid && clientSender.getBalance() - amount == new_balance) {
 
-                System.out.println("ECHO " + adeb.echos + "\nREADY " + adeb.ready);
+                    Client clientReceiver = clientList.get(keyReceiver);
 
-                Client clientReceiver = clientList.get(keyReceiver);
+                    if (clientSender.getBalance() < amount) {
+                        message = "Sender account does not have enough balance.";
+                    } else if (0 >= amount) {
+                        message = "Invalid amount, must be > 0.";
+                    } else {
 
-                if (clientSender.getBalance() < amount || clientSender.getBalance() < clientSender.getPendent_balance()) {
-                    message = "Sender account does not have enough balance.";
-                } else if (0 >= amount) {
-                    message = "Invalid amount, must be > 0.";
+                        message = "valid";
+
+                        clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+                        clientSender.setBalance(new_balance);
+                        clientSender.setWid(wid);
+                        clientSender.setPairSign(pairSign);
+
+                        saveHandler.saveState();
+                    }
                 } else {
-
-                    message = "valid";
-
-                    clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
-
-                    clientSender.addPendentBalance(amount);
-                    clientSender.setPairSign(pairSign);
-
-                    saveHandler.saveState();
+                    message = "Wrong balance or wid.";
                 }
             } else {
-                message = "Incorrect signature, repeated event or incorrect transaction id.";
+                message = "Incorrect signature or incorrect transaction id.";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             message = "Something wrong with the keys!";
         }
 
-        String finalString1 = keyPair.getPublic().toString() + message + clientSender.getWid();
+        String finalString1 = keyPair.getPublic().toString() + message + wid;
         byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         SendAmountResponse response = SendAmountResponse.newBuilder()
                 .setMessage(message)
-                .setWid(clientSender.getWid())
+                .setWid(wid)
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setSignature(ByteString.copyFrom(signature1))
                 .build();
@@ -234,41 +242,42 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         String message = "";
         int transfer = request.getTransfer();
         int wid = request.getWid();
-        int amount = 0;
-        int balance = 0;
-        byte [] pairSign = null;
+        int new_balance = request.getFutureBalance();
+        byte [] pairSign = request.getPairSign().toByteArray();
 
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
-            String finalString = publicKey.toString() + transfer + wid;
+            String finalString = publicKey.toString() + new_balance + wid + Arrays.toString(pairSign) + transfer;
             byte [] signature = request.getSignature().toByteArray();
 
             Client client = clientList.get(publicKey);
 
-            if (crypto.verifySignature(finalString, publicKey, signature) && client.getWid() < wid && transfer + 1 <= client.getPending().size()) {
+            if (crypto.verifySignature(finalString, publicKey, signature)) {
 
-                message = "valid";
+
+                //ADEB
 
                 Transactions transaction = client.getPending().get(transfer);
-                client.setBalance(client.getBalance() + transaction.getValue());
-                amount = transaction.getValue();
 
-                Client client2 = clientList.get(transaction.getSourceKey());
-                client2.setBalance(client2.getBalance() - transaction.getValue());
-                client2.addPendentBalance(-transaction.getValue());
+                if (client.getWid() < wid && transfer + 1 <= client.getPending().size() && transaction.getValue() + client.getBalance() == new_balance) {
+                    message = "valid";
 
-                client.removePending(transfer);
-                client.addHistory(transaction);
+                    client.setBalance(new_balance);
 
-                transaction.setValue(-transaction.getValue());
-                client2.addHistory(transaction);
+                    Client client2 = clientList.get(transaction.getSourceKey());
 
-                saveHandler.saveState();
+                    client.removePending(transfer);
+                    client.addHistory(transaction);
 
-                client.incrementWid();
-                wid++;
-                balance = client.getBalance();
-                pairSign = client.getPair_signature();
+                    transaction.setValue(-transaction.getValue());
+                    client2.addHistory(transaction);
+
+                    client.setWid(wid);
+                    client.setPairSign(pairSign);
+                    wid++;
+
+                    saveHandler.saveState();
+                }
 
             } else {
                 message = "Incorrect signature, repeated event or incorrect transaction id.";
@@ -278,15 +287,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             message = "Something wrong with the keys!";
         }
 
-        String finalString1 = keyPair.getPublic().toString() + message + amount + balance + wid + Arrays.toString(pairSign);
+        String finalString1 = keyPair.getPublic().toString() + message + wid;
         byte [] signature1 = crypto.getSignature(finalString1, keyPair.getPrivate());
 
         ReceiveAmountResponse response = ReceiveAmountResponse.newBuilder()
                 .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                .setReceiveAmount(amount)
-                .setBalance(balance)
                 .setWid(wid)
-                .setPairSign(ByteString.copyFrom(pairSign))
                 .setMessage(message)
                 .setSignature(ByteString.copyFrom(signature1))
                 .build();
@@ -310,9 +316,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                 Client client = clientList.get(publicKey);
 
-                if (!clientList.get(publicKey).getEventList().contains(nonce)) {
+                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
 
-                    clientList.get(publicKey).addEvent(nonce);
+                    clientList.get(mypublicKey).addEvent(nonce);
 
                     for (Transactions transaction : client.getHistory()){
                         transactions.add(Transaction.newBuilder()

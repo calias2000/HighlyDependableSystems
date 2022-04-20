@@ -20,8 +20,9 @@ public class ServerFrontend implements AutoCloseable {
     private final List<ManagedChannel> channels;
     private final List<ServerServiceGrpc.ServerServiceStub> stubs;
     private final int quorum;
-    private int byzantine;
-    private Crypto crypto;
+    private final int byzantine;
+    private final Crypto crypto;
+    private PublicKey auxPubKey;
 
     public ServerFrontend(int value, Crypto crypto) {
         this.channels = new ArrayList<>();
@@ -30,6 +31,7 @@ public class ServerFrontend implements AutoCloseable {
         this.quorum = 2 * value + 1;
         this.byzantine = value;
         this.crypto = crypto;
+        this.auxPubKey = null;
 
         for (int i = 0; i < numberChannels; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -83,7 +85,7 @@ public class ServerFrontend implements AutoCloseable {
                 try {
                     PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
                     String finalString = serverPubKey.toString() + response.getMessage();
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -122,6 +124,7 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
+        boolean fakeTransaction = false;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -133,9 +136,37 @@ public class ServerFrontend implements AutoCloseable {
                             + response.getRid() + response.getMessage()
                             + response.getTransactionsList() + response.getNonce();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    String pairSignString = String.valueOf(response.getBalance()) + response.getWid();
+
+                    PublicKey otherPubK = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())
+                            || request.getNonce() + 1 != response.getNonce()
+                            || !crypto.verifySignature(pairSignString, otherPubK, response.getPairSign().toByteArray())
+                            || request.getRid() != response.getRid()) {
+
                         iterator.remove();
                         counter++;
+                        System.out.println("BYZANTINE SIGNING SERVER");
+
+                    } else {
+                        for (Transaction transaction : response.getTransactionsList()){
+                            String transactionString = transaction.getSourceUsername() + transaction.getDestUsername()
+                                    + transaction.getAmount() + transaction.getSource() + transaction.getDestination()
+                                    + transaction.getWid();
+                            PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getSource().toByteArray());
+                            if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
+                                fakeTransaction = true;
+                            } else {
+                                System.out.println("NICE TRANSACTION!");
+                            }
+                        }
+
+                        if (fakeTransaction) {
+                            iterator.remove();
+                            counter++;
+                            break;
+                        }
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -177,7 +208,7 @@ public class ServerFrontend implements AutoCloseable {
                     PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
                     String finalString = serverPubKey.toString() + response.getMessage() + response.getWid();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -218,12 +249,10 @@ public class ServerFrontend implements AutoCloseable {
             while (iterator.hasNext()) {
                 ReceiveAmountResponse response = (ReceiveAmountResponse) iterator.next();
                 try {
-                    PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
-                    String finalString = serverPubKey.toString() + response.getMessage()
-                            + response.getReceiveAmount() + response.getBalance()
-                            + response.getWid() + response.getPairSign();
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getMessage() + response.getWid();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
                     }
@@ -267,7 +296,7 @@ public class ServerFrontend implements AutoCloseable {
                     PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
                     String finalString = serverPubKey.toString() + response.getTransactionsList() + response.getNonce() + response.getRid() + response.getMessage();
 
-                    if (!verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
                         iterator.remove();
                         counter++;
                     }
@@ -285,17 +314,7 @@ public class ServerFrontend implements AutoCloseable {
         }
     }
 
-    public boolean verifySignature(String finalString, PublicKey publicKey, byte[] signature){
-        try {
-            Signature dsaForVerify = Signature.getInstance("SHA256withRSA");
-            dsaForVerify.initVerify(publicKey);
-            dsaForVerify.update(finalString.getBytes());
-            return dsaForVerify.verify(signature);
-        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
-            System.out.println("Signatures don't match.");
-            return false;
-        }
-    }
+    public void setAuxPubKey(PublicKey key) { this.auxPubKey = key; }
 
     @Override
     public final void close() {
