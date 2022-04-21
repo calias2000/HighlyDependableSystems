@@ -70,6 +70,7 @@ public class AppMain {
 						keyPair = getKeyPair(accountUsername, accountPassword);
 						logout = false;
 						System.out.println("\nSuccessfully logged in.");
+						app.getRid(keyPair.getPublic());
 					}
 					break;
 

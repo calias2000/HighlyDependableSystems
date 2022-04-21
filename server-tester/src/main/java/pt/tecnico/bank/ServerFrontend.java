@@ -22,7 +22,6 @@ public class ServerFrontend implements AutoCloseable {
     private final int quorum;
     private final int byzantine;
     private final Crypto crypto;
-    private PublicKey auxPubKey;
 
     public ServerFrontend(int value, Crypto crypto) {
         this.channels = new ArrayList<>();
@@ -31,7 +30,6 @@ public class ServerFrontend implements AutoCloseable {
         this.quorum = 2 * value + 1;
         this.byzantine = value;
         this.crypto = crypto;
-        this.auxPubKey = null;
 
         for (int i = 0; i < numberChannels; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -41,6 +39,47 @@ public class ServerFrontend implements AutoCloseable {
     }
 
     /* ---------- Services ---------- */
+
+    public RidResponse rid(RidRequest request) {
+        RespCollector collector = new RespCollector();
+
+        CountDownLatch finishLatch = new CountDownLatch(quorum);
+
+        for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
+            stub.withDeadlineAfter(3, TimeUnit.SECONDS).rid(request, new Observer<>(collector, finishLatch));
+        }
+
+        try {
+            finishLatch.await();
+        } catch (InterruptedException e) {
+            System.out.println("Error");
+        }
+
+        Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
+
+        synchronized (collector.responses) {
+            while (iterator.hasNext()) {
+                RidResponse response = (RidResponse) iterator.next();
+                try {
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getServerPubKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getRid() + response.getMessage();
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                        iterator.remove();
+                        counter++;
+                    }
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                    System.out.println("Something wrong with the algorithm!");
+                }
+            }
+        }
+
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (RidResponse) collector.responses.get(0);
+        }
+    }
 
     public PingResponse ping(PingRequest request) {
         RespCollector collector = new RespCollector();
@@ -288,17 +327,41 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
+        boolean fakeTransaction = false;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
                 AuditResponse response = (AuditResponse) iterator.next();
                 try {
-                    PublicKey serverPubKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(response.getPublicKey().toByteArray()));
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
                     String finalString = serverPubKey.toString() + response.getTransactionsList() + response.getNonce() + response.getRid() + response.getMessage();
 
-                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()) {
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray()) || request.getNonce() + 1 != response.getNonce()
+                            || request.getRid() != response.getRid()) {
+
                         iterator.remove();
                         counter++;
+                        System.out.println("BYZANTINE SIGNING SERVER");
+                    } else {
+                        for (Transaction transaction : response.getTransactionsList()){
+                            String transactionString = transaction.getSourceUsername() + transaction.getDestUsername()
+                                    + transaction.getAmount() + transaction.getSource() + transaction.getDestination()
+                                    + transaction.getWid();
+
+                            PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getDestination().toByteArray());
+                            if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
+                                fakeTransaction = true;
+                            } else {
+                                System.out.println("NICE TRANSACTION!");
+                            }
+                        }
+
+                        if (fakeTransaction) {
+                            System.out.println("NICE TRANSACTION!");
+                            iterator.remove();
+                            counter++;
+                            break;
+                        }
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -313,8 +376,6 @@ public class ServerFrontend implements AutoCloseable {
             return (AuditResponse) collector.responses.get(0);
         }
     }
-
-    public void setAuxPubKey(PublicKey key) { this.auxPubKey = key; }
 
     @Override
     public final void close() {

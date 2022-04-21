@@ -29,6 +29,32 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
     }
 
 
+    public void rid(RidRequest request, StreamObserver<RidResponse> responseObserver){
+        String message = "";
+        int rid = 0;
+
+        try {
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            rid = clientList.get(publicKey).getRid();
+            message = "valid";
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            message = "Something wrong with the keys!";
+        }
+
+        String finalString = keyPair.getPublic().toString() + rid + message;
+        byte[] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        RidResponse response = RidResponse.newBuilder()
+                .setServerPubKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setRid(rid)
+                .setMessage(message)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
     public void ping(PingRequest request, StreamObserver<PingResponse> responseObserver) {
         String input = request.getInput();
 
@@ -106,9 +132,9 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 wid = client.getWid();
                 pairSignature = client.getPair_signature();
 
-                if (!clientList.get(mypublicKey).getEventList().contains(nonce) && rid > me.getRid()) {
+                if (!me.getEventList().contains(nonce) && rid > me.getRid()) {
 
-                    clientList.get(mypublicKey).addEvent(nonce);
+                    me.addEvent(nonce);
 
                     for (Transactions transaction : client.getPending()){
                         transactions.add(Transaction.newBuilder()
@@ -122,7 +148,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                                 .build());
                     }
 
-                    me.setRid(rid);
+                    me.incrementRid();
 
                     message = "valid";
 
@@ -206,8 +232,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                         message = "valid";
 
                         clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+
+                        clientSender.addHistory(new Transactions(sourceUsername, destUsername, -amount, keySender, keyReceiver, wid, transactionSignature));
                         clientSender.setBalance(new_balance);
-                        clientSender.setWid(wid);
+                        clientSender.incrementWid();
                         clientSender.setPairSign(pairSign);
 
                         saveHandler.saveState();
@@ -244,10 +272,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int wid = request.getWid();
         int new_balance = request.getFutureBalance();
         byte [] pairSign = request.getPairSign().toByteArray();
+        Transaction toAuditTransaction = request.getToAuditTransaction();
 
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
-            String finalString = publicKey.toString() + new_balance + wid + Arrays.toString(pairSign) + transfer;
+            String finalString = publicKey.toString() + new_balance + wid + Arrays.toString(pairSign) + transfer + toAuditTransaction;
             byte [] signature = request.getSignature().toByteArray();
 
             Client client = clientList.get(publicKey);
@@ -264,15 +293,15 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     client.setBalance(new_balance);
 
-                    Client client2 = clientList.get(transaction.getSourceKey());
-
                     client.removePending(transfer);
-                    client.addHistory(transaction);
+                    client.addHistory(new Transactions(toAuditTransaction.getSourceUsername(),
+                            toAuditTransaction.getDestUsername(),
+                            toAuditTransaction.getAmount(),
+                            crypto.getPubKeyGrpc(toAuditTransaction.getSource().toByteArray()),
+                            crypto.getPubKeyGrpc(toAuditTransaction.getDestination().toByteArray()),
+                            toAuditTransaction.getWid(), toAuditTransaction.getSignature().toByteArray()));
 
-                    transaction.setValue(-transaction.getValue());
-                    client2.addHistory(transaction);
-
-                    client.setWid(wid);
+                    client.incrementWid();
                     client.setPairSign(pairSign);
                     wid++;
 
@@ -315,10 +344,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             if (clientList.containsKey(publicKey)) {
 
                 Client client = clientList.get(publicKey);
+                Client me = clientList.get(mypublicKey);
 
-                if (!clientList.get(mypublicKey).getEventList().contains(nonce)) {
+                if (!me.getEventList().contains(nonce) && rid > me.getRid()) {
 
-                    clientList.get(mypublicKey).addEvent(nonce);
+                    me.addEvent(nonce);
 
                     for (Transactions transaction : client.getHistory()){
                         transactions.add(Transaction.newBuilder()
@@ -331,6 +361,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                                 .setSignature(ByteString.copyFrom(transaction.getSignature()))
                                 .build());
                     }
+
+                    me.incrementRid();
 
                     message = "valid";
 

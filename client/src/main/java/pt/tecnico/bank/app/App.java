@@ -38,6 +38,21 @@ public class App {
         }
     }
 
+    public void getRid(PublicKey pubKey) {
+
+        RidResponse response = frontend.rid(RidRequest.newBuilder().setPublicKey(ByteString.copyFrom(pubKey.getEncoded())).build());
+
+        if (response == null) {
+            System.out.println("No quorum achieved when getting rid value!");
+        }
+        else if (response.getMessage().equals("valid")) {
+            this.rid = response.getRid();
+            System.out.println("OBTAINED RID " + this.rid);
+        } else {
+            System.out.println(response.getMessage());
+        }
+    }
+
     public boolean openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
 
         String pairSignatureString = String.valueOf(this.balance) + 0;
@@ -70,6 +85,8 @@ public class App {
     }
 
     public void checkAccount(PublicKey publicKey, KeyPair keyPair){
+
+        System.out.println("RID " +  this.rid);
 
         int nonce = crypto.getSecureRandom();
 
@@ -108,6 +125,8 @@ public class App {
     }
 
     public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername){
+
+        System.out.println("RID " +  this.rid);
 
         int nonce = crypto.getSecureRandom();
 
@@ -165,6 +184,8 @@ public class App {
 
     public void receiveAmount(PublicKey publicKey, int transfer, PrivateKey privateKey) {
 
+        System.out.println("RID " +  this.rid);
+
         int nonce = crypto.getSecureRandom();
 
         CheckAccountResponse response1 = frontend.checkAccount(CheckAccountRequest.newBuilder()
@@ -174,7 +195,8 @@ public class App {
                 .setNonce(nonce)
                 .build());
 
-        int future_balance = response1.getBalance() + response1.getTransactions(transfer).getAmount();
+        Transaction auxTransaction = response1.getTransactions(transfer);
+        int future_balance = response1.getBalance() + auxTransaction.getAmount();
 
         this.rid++;
 
@@ -182,7 +204,22 @@ public class App {
         String pairSignString = String.valueOf(future_balance) + new_wid;
         byte [] pairSign = crypto.getSignature(pairSignString, privateKey);
 
-        byte [] signature = crypto.getSignature(publicKey.toString() + future_balance + new_wid + Arrays.toString(pairSign) + transfer, privateKey);
+        String transactionString = auxTransaction.getSourceUsername() + auxTransaction.getDestUsername()
+                + auxTransaction.getAmount() + auxTransaction.getSource() + auxTransaction.getDestination() + new_wid;
+
+        byte [] signatureTrans = crypto.getSignature(transactionString, privateKey);
+
+        Transaction toAuditTransaction = Transaction.newBuilder()
+                .setSourceUsername(auxTransaction.getSourceUsername())
+                .setDestUsername(auxTransaction.getDestUsername())
+                .setAmount(auxTransaction.getAmount())
+                .setSource(auxTransaction.getSource())
+                .setDestination(auxTransaction.getDestination())
+                .setWid(new_wid)
+                .setSignature(ByteString.copyFrom(signatureTrans))
+                .build();
+
+        byte [] signature = crypto.getSignature(publicKey.toString() + future_balance + new_wid + Arrays.toString(pairSign) + transfer + toAuditTransaction, privateKey);
 
         ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
@@ -190,6 +227,7 @@ public class App {
                 .setWid(new_wid)
                 .setPairSign(ByteString.copyFrom(pairSign))
                 .setTransfer(transfer)
+                .setToAuditTransaction(toAuditTransaction)
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
@@ -207,13 +245,15 @@ public class App {
 
     public void audit(PublicKey publicKey, KeyPair keyPair){
 
+        System.out.println("RID " +  this.rid);
+
         int random = crypto.getSecureRandom();
 
         AuditRequest request = AuditRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setNonce(random)
-                .setRid(this.rid)
+                .setRid(this.rid + 1)
                 .build();
 
         AuditResponse response = frontend.audit(request);

@@ -25,6 +25,18 @@ message PingResponse {
 	string output = 1;
 }
 
+message RidRequest {
+  bytes public_key = 1;
+}
+
+message RidResponse {
+  bytes server_pub_key = 1;
+  int32 rid = 2;
+  string message = 3;
+
+  bytes signature = 4;
+}
+
 
 
 message OpenAccountRequest {
@@ -92,7 +104,8 @@ message ReceiveAmountRequest {
   bytes pairSign = 4;
 
   int32 transfer = 5;
-  bytes signature = 6;
+  Transaction to_audit_transaction = 6;
+  bytes signature = 7;
 }
 
 message ReceiveAmountResponse {
@@ -125,6 +138,7 @@ message AuditResponse {
 
 service ServerService {
   rpc ping(PingRequest) returns (PingResponse);
+  rpc rid(RidRequest) returns (RidResponse);
   rpc openAccount(OpenAccountRequest) returns (OpenAccountResponse);
   rpc sendAmount(SendAmountRequest) returns (SendAmountResponse);
   rpc checkAccount(CheckAccountRequest) returns (CheckAccountResponse);
