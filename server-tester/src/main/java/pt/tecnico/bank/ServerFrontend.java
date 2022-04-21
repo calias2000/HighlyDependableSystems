@@ -8,10 +8,7 @@ import pt.tecnico.bank.grpc.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -57,6 +54,8 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
+        int rid = -1;
+        RidResponse bestResponse = null;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -67,6 +66,10 @@ public class ServerFrontend implements AutoCloseable {
                     if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
+                    } else {
+                        if (response.getRid() > rid){
+                            bestResponse = response;
+                        }
                     }
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                     System.out.println("Something wrong with the algorithm!");
@@ -77,7 +80,7 @@ public class ServerFrontend implements AutoCloseable {
         if (counter > this.byzantine) {
             return null;
         } else {
-            return (RidResponse) collector.responses.get(0);
+            return bestResponse;
         }
     }
 
@@ -164,6 +167,8 @@ public class ServerFrontend implements AutoCloseable {
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
         boolean fakeTransaction = false;
+        int wid = -1;
+        CheckAccountResponse bestResponse = null;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -196,8 +201,7 @@ public class ServerFrontend implements AutoCloseable {
                             PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getSource().toByteArray());
                             if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
                                 fakeTransaction = true;
-                            } else {
-                                System.out.println("NICE TRANSACTION!");
+                                break;
                             }
                         }
 
@@ -205,6 +209,12 @@ public class ServerFrontend implements AutoCloseable {
                             iterator.remove();
                             counter++;
                             break;
+                        } else {
+                            if (response.getWid() > wid || (response.getWid() >= wid && response.getMessage().equals("valid"))){
+                                wid = response.getWid();
+                                bestResponse = response;
+                                System.out.println("BETTER RESPONSE");
+                            }
                         }
                     }
 
@@ -217,7 +227,7 @@ public class ServerFrontend implements AutoCloseable {
         if (counter > this.byzantine) {
             return null;
         } else {
-            return (CheckAccountResponse) collector.responses.get(0);
+            return bestResponse;
         }
     }
 
@@ -239,6 +249,8 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
+        int wid = -1;
+        SendAmountResponse bestResponse = null;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -250,6 +262,11 @@ public class ServerFrontend implements AutoCloseable {
                     if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
+                    } else {
+                        if (response.getWid() > wid){
+                            bestResponse = response;
+                            System.out.println("BETTER RESPONSE");
+                        }
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -261,7 +278,7 @@ public class ServerFrontend implements AutoCloseable {
         if (counter > this.byzantine) {
             return null;
         } else {
-            return (SendAmountResponse) collector.responses.get(0);
+            return bestResponse;
         }
     }
 
@@ -283,6 +300,8 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
+        int wid = -1;
+        ReceiveAmountResponse bestResponse = null;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -294,6 +313,11 @@ public class ServerFrontend implements AutoCloseable {
                     if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
+                    } else {
+                        if (response.getWid() > wid){
+                            bestResponse = response;
+                            System.out.println("BETTER RESPONSE");
+                        }
                     }
 
                 } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
@@ -305,7 +329,7 @@ public class ServerFrontend implements AutoCloseable {
         if (counter > this.byzantine) {
             return null;
         } else {
-            return (ReceiveAmountResponse) collector.responses.get(0);
+            return bestResponse;
         }
     }
 
@@ -328,6 +352,8 @@ public class ServerFrontend implements AutoCloseable {
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
         boolean fakeTransaction = false;
+        AuditResponse bestResponse = null;
+        int size = -1;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
@@ -342,6 +368,7 @@ public class ServerFrontend implements AutoCloseable {
                         iterator.remove();
                         counter++;
                         System.out.println("BYZANTINE SIGNING SERVER");
+
                     } else {
                         for (Transaction transaction : response.getTransactionsList()){
                             String transactionString = transaction.getSourceUsername() + transaction.getDestUsername()
@@ -351,16 +378,21 @@ public class ServerFrontend implements AutoCloseable {
                             PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getDestination().toByteArray());
                             if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
                                 fakeTransaction = true;
-                            } else {
-                                System.out.println("NICE TRANSACTION!");
+                                break;
                             }
                         }
 
                         if (fakeTransaction) {
-                            System.out.println("NICE TRANSACTION!");
                             iterator.remove();
                             counter++;
                             break;
+
+                        } else {
+                            if (response.getTransactionsList().size() > size) {
+                                size = response.getTransactionsList().size();
+                                bestResponse = response;
+                                System.out.println("BETTER RESPONSE!");
+                            }
                         }
                     }
 
@@ -373,7 +405,7 @@ public class ServerFrontend implements AutoCloseable {
         if (counter > this.byzantine) {
             return null;
         } else {
-            return (AuditResponse) collector.responses.get(0);
+            return bestResponse;
         }
     }
 
