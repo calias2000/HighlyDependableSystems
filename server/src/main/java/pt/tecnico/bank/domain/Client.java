@@ -51,8 +51,8 @@ public class Client implements Serializable {
     public byte[] getPair_signature() { return pair_signature; }
     public void setPairSign(byte[] pair_signature) { this.pair_signature = pair_signature; }
 
-    public void incrementWid() { this.wid++; }
-    public void incrementRid() { this.rid++; }
+    public void setWid(int value) { this.wid = value; }
+    public void setRid(int value) { this.rid = value; }
 
     public HashSet<Integer> getEventList() { return this.eventList; }
     public void addEvent(int nonce) { this.eventList.add(nonce); }

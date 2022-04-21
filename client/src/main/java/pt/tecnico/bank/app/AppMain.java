@@ -135,7 +135,7 @@ public class AppMain {
 						System.out.print("\nAccount username: ");
 						username = scanner.nextLine();
 						if (existsAccount(username)) {
-							app.audit(getPubKeyfromCert(username), keyPair);
+							app.audit(getPubKeyfromCert(username), keyPair, username);
 						} else {
 							System.out.println("No account found with that username.");
 						}

@@ -132,7 +132,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 wid = client.getWid();
                 pairSignature = client.getPair_signature();
 
-                if (!me.getEventList().contains(nonce) && rid > me.getRid()) {
+                if (!me.getEventList().contains(nonce)) {
 
                     me.addEvent(nonce);
 
@@ -148,7 +148,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                                 .build());
                     }
 
-                    me.incrementRid();
+                    me.setRid(rid);
 
                     message = "valid";
 
@@ -188,7 +188,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
         String message = "";
         Transaction transaction = request.getTransaction();
-        Client clientSender = null;
 
         String sourceUsername = transaction.getSourceUsername();
         String destUsername = transaction.getDestUsername();
@@ -209,7 +208,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             byte [] signature = request.getSignature().toByteArray();
 
-            clientSender = clientList.get(keySender);
+            Client clientSender = clientList.get(keySender);
 
             if (crypto.verifySignature(finalString, keySender, signature)) {
 
@@ -232,11 +231,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                         message = "valid";
 
                         clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+                        clientSender.addHistory(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
 
-                        clientSender.addHistory(new Transactions(sourceUsername, destUsername, -amount, keySender, keyReceiver, wid, transactionSignature));
                         clientSender.setBalance(new_balance);
-                        clientSender.incrementWid();
+                        clientSender.setWid(wid);
                         clientSender.setPairSign(pairSign);
+                        System.out.println("CLIENT WID " + clientSender.getWid() + "\nCLIENT RID " + clientSender.getRid());
 
                         saveHandler.saveState();
                     }
@@ -295,13 +295,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     client.removePending(transfer);
                     client.addHistory(new Transactions(toAuditTransaction.getSourceUsername(),
-                            toAuditTransaction.getDestUsername(),
-                            toAuditTransaction.getAmount(),
+                            toAuditTransaction.getDestUsername(), toAuditTransaction.getAmount(),
                             crypto.getPubKeyGrpc(toAuditTransaction.getSource().toByteArray()),
                             crypto.getPubKeyGrpc(toAuditTransaction.getDestination().toByteArray()),
                             toAuditTransaction.getWid(), toAuditTransaction.getSignature().toByteArray()));
 
-                    client.incrementWid();
+                    client.setWid(wid);
                     client.setPairSign(pairSign);
                     wid++;
 
@@ -346,7 +345,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 Client client = clientList.get(publicKey);
                 Client me = clientList.get(mypublicKey);
 
-                if (!me.getEventList().contains(nonce) && rid > me.getRid()) {
+                if (!me.getEventList().contains(nonce)) {
 
                     me.addEvent(nonce);
 
@@ -362,7 +361,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                                 .build());
                     }
 
-                    me.incrementRid();
+                    me.setRid(rid);
 
                     message = "valid";
 

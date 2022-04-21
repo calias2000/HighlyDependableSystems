@@ -24,8 +24,8 @@ public class ServerFrontend implements AutoCloseable {
         this.channels = new ArrayList<>();
         this.stubs = new ArrayList<>();
         int numberChannels = 3 * value + 1;
-        this.quorum = 2 * value + 1;
         this.byzantine = value;
+        this.quorum = (numberChannels + this.byzantine) / 2 + 1;
         this.crypto = crypto;
 
         for (int i = 0; i < numberChannels; i++){
@@ -166,12 +166,12 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
-        boolean fakeTransaction = false;
         int wid = -1;
         CheckAccountResponse bestResponse = null;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
+                boolean fakeTransaction = false;
                 CheckAccountResponse response = (CheckAccountResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
@@ -191,13 +191,14 @@ public class ServerFrontend implements AutoCloseable {
 
                         iterator.remove();
                         counter++;
-                        System.out.println("BYZANTINE SIGNING SERVER");
 
                     } else {
                         for (Transaction transaction : response.getTransactionsList()){
                             String transactionString = transaction.getSourceUsername() + transaction.getDestUsername()
-                                    + transaction.getAmount() + transaction.getSource() + transaction.getDestination()
+                                    + transaction.getAmount() + crypto.getPubKeyGrpc(transaction.getSource().toByteArray())
+                                    + crypto.getPubKeyGrpc(transaction.getDestination().toByteArray())
                                     + transaction.getWid();
+
                             PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getSource().toByteArray());
                             if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
                                 fakeTransaction = true;
@@ -208,12 +209,11 @@ public class ServerFrontend implements AutoCloseable {
                         if (fakeTransaction) {
                             iterator.remove();
                             counter++;
-                            break;
+
                         } else {
-                            if (response.getWid() > wid || (response.getWid() >= wid && response.getMessage().equals("valid"))){
+                            if (response.getWid() > wid){
                                 wid = response.getWid();
                                 bestResponse = response;
-                                System.out.println("BETTER RESPONSE");
                             }
                         }
                     }
@@ -262,10 +262,11 @@ public class ServerFrontend implements AutoCloseable {
                     if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
                         iterator.remove();
                         counter++;
+
                     } else {
                         if (response.getWid() > wid){
+                            wid = response.getWid();
                             bestResponse = response;
-                            System.out.println("BETTER RESPONSE");
                         }
                     }
 
@@ -315,8 +316,8 @@ public class ServerFrontend implements AutoCloseable {
                         counter++;
                     } else {
                         if (response.getWid() > wid){
+                            wid = response.getWid();
                             bestResponse = response;
-                            System.out.println("BETTER RESPONSE");
                         }
                     }
 
@@ -351,12 +352,12 @@ public class ServerFrontend implements AutoCloseable {
 
         Iterator<Object> iterator = collector.responses.iterator();
         int counter = 0;
-        boolean fakeTransaction = false;
         AuditResponse bestResponse = null;
         int size = -1;
 
         synchronized (collector.responses) {
             while (iterator.hasNext()) {
+                boolean fakeTransaction = false;
                 AuditResponse response = (AuditResponse) iterator.next();
                 try {
                     PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
@@ -367,15 +368,14 @@ public class ServerFrontend implements AutoCloseable {
 
                         iterator.remove();
                         counter++;
-                        System.out.println("BYZANTINE SIGNING SERVER");
 
                     } else {
                         for (Transaction transaction : response.getTransactionsList()){
                             String transactionString = transaction.getSourceUsername() + transaction.getDestUsername()
-                                    + transaction.getAmount() + transaction.getSource() + transaction.getDestination()
-                                    + transaction.getWid();
+                                    + transaction.getAmount() + crypto.getPubKeyGrpc(transaction.getSource().toByteArray())
+                                    + crypto.getPubKeyGrpc(transaction.getDestination().toByteArray()) + transaction.getWid();
 
-                            PublicKey transactionPubK = crypto.getPubKeyGrpc(transaction.getDestination().toByteArray());
+                            PublicKey transactionPubK = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
                             if (!crypto.verifySignature(transactionString, transactionPubK, transaction.getSignature().toByteArray())) {
                                 fakeTransaction = true;
                                 break;
@@ -385,13 +385,11 @@ public class ServerFrontend implements AutoCloseable {
                         if (fakeTransaction) {
                             iterator.remove();
                             counter++;
-                            break;
 
                         } else {
                             if (response.getTransactionsList().size() > size) {
                                 size = response.getTransactionsList().size();
                                 bestResponse = response;
-                                System.out.println("BETTER RESPONSE!");
                             }
                         }
                     }
