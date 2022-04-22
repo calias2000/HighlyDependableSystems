@@ -1,4 +1,4 @@
-package pt.tecnico.bank;
+package pt.tecnico.bank.app;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -1,13 +1,13 @@
-package pt.tecnico.bank;
+package pt.tecnico.bank.app;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
+import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.grpc.*;
 
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;

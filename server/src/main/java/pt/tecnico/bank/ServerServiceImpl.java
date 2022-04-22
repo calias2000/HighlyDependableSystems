@@ -422,7 +422,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                     client.setBalance(balance);
                     client.setPending(pending);
                     client.setWid(wid);
-                    client.setRid(rid);
                     client.setPairSign(pairSign);
                 }
                 System.out.println("Successful write back!");

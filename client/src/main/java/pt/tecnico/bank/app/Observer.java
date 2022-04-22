@@ -1,4 +1,4 @@
-package pt.tecnico.bank;
+package pt.tecnico.bank.app;
 
 import io.grpc.stub.StreamObserver;
 

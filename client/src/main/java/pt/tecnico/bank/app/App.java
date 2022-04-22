@@ -1,16 +1,11 @@
 package pt.tecnico.bank.app;
 
 import com.google.protobuf.ByteString;
-import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslClientHelloHandler;
 import pt.tecnico.bank.Crypto;
-import pt.tecnico.bank.ServerFrontend;
 import pt.tecnico.bank.grpc.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 
 public class App {
@@ -85,7 +80,7 @@ public class App {
         }
     }
 
-    public void checkAccount(PublicKey publicKey, KeyPair keyPair){
+    public CheckAccountResponse checkAccount(PublicKey publicKey, KeyPair keyPair){
 
         int nonce = crypto.getSecureRandom();
 
@@ -100,6 +95,7 @@ public class App {
 
         if (response == null) {
             System.out.println("No quorum achieved!");
+            return response;
         }
         else if (response.getMessage().equals("valid")) {
 
@@ -141,16 +137,20 @@ public class App {
 
                 frontend.checkWriteBack(request1);
 
+                return response;
+
             } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
                 System.out.println("Something wrong with the algorithm!");
+                return response;
             }
 
         } else {
             System.out.println(response.getMessage());
+            return response;
         }
     }
 
-    public void sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername) {
+    public SendAmountResponse sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername) {
 
         int nonce = crypto.getSecureRandom();
 
@@ -163,6 +163,7 @@ public class App {
 
         if (response1 == null) {
             System.out.println("No quorum achieved!");
+            return null;
         }
         else if (response1.getMessage().equals("valid")) {
 
@@ -203,13 +204,17 @@ public class App {
 
             if (response == null) {
                 System.out.println("No quorum achieved!");
+                return response;
             } else if (response.getMessage().equals("valid")) {
                 System.out.println("\nPending transaction, waiting for approval.\n");
+                return response;
             } else {
                 System.out.println(response.getMessage());
+                return response;
             }
         } else {
             System.out.println(response1.getMessage());
+            return null;
         }
     }
 

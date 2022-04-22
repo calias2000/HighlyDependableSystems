@@ -1,7 +1,7 @@
 package pt.tecnico.bank.app;
 
 import pt.tecnico.bank.Crypto;
-import pt.tecnico.bank.ServerFrontend;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;

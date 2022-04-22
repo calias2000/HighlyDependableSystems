@@ -26,18 +26,18 @@
 			<artifactId>server-contract</artifactId>
 			<version>1.0.0-SNAPSHOT</version>
 		</dependency>
-		<!-- tester brings front-end -->
-		<dependency>
-			<groupId>pt.tecnico.bank.G26</groupId>
-			<artifactId>server-tester</artifactId>
-			<version>1.0.0-SNAPSHOT</version>
-			<scope>compile</scope>
-		</dependency>
 		<dependency>
 			<groupId>pt.tecnico.bank.G26</groupId>
 			<artifactId>crypto</artifactId>
 			<version>1.0.0-SNAPSHOT</version>
 			<scope>compile</scope>
+		</dependency>
+		<!-- JUnit is a unit testing framework for the Java programming language. -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-engine</artifactId>
+			<version>${version.junit}</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 
