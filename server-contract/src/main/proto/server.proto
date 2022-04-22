@@ -136,6 +136,38 @@ message AuditResponse {
 }
 
 
+message CheckWriteBackRequest {
+  repeated Transaction transactions = 1;
+
+  int32 balance = 2;
+  int32 wid = 3;
+  bytes pairSign = 4;
+
+  int32 rid = 5;
+
+  bytes public_key = 6;
+  bytes my_public_key = 7;
+
+  bytes signature = 8;
+}
+
+message CheckWriteBackResponse {
+  string message = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
+}
+
+message AuditWriteBackRequest {
+  repeated Transaction transactions = 1;
+
+  int32 rid = 2;
+}
+
+message AuditWriteBackResponse {
+
+}
+
+
 service ServerService {
   rpc ping(PingRequest) returns (PingResponse);
   rpc rid(RidRequest) returns (RidResponse);
@@ -144,4 +176,6 @@ service ServerService {
   rpc checkAccount(CheckAccountRequest) returns (CheckAccountResponse);
   rpc receiveAmount(ReceiveAmountRequest) returns (ReceiveAmountResponse);
   rpc audit(AuditRequest) returns (AuditResponse);
+  rpc checkWriteBack(CheckWriteBackRequest) returns (CheckWriteBackResponse);
+  rpc auditWriteBack(AuditWriteBackRequest) returns (AuditWriteBackResponse);
 }

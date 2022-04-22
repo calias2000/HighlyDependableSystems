@@ -392,4 +392,58 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
+
+    public void checkWriteBack(CheckWriteBackRequest request, StreamObserver<CheckWriteBackResponse> responseObserver){
+        String message = "";
+        List<Transaction> transactions = request.getTransactionsList();
+        int balance = request.getBalance();
+        int wid = request.getWid();
+        byte [] pairSign = request.getPairSign().toByteArray();
+        int rid = request.getRid();
+        try {
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
+            String finalString = String.valueOf(balance) + transactions + wid + Arrays.toString(pairSign) + rid + publicKey.toString() + mypublicKey.toString();
+
+            System.out.println(finalString.hashCode());
+
+            if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
+
+                Client client = clientList.get(publicKey);
+                List<Transactions> pending = new ArrayList<>();
+
+                if (wid > client.getWid()) {
+                    for (Transaction transaction : transactions) {
+                        pending.add(new Transactions(transaction.getSourceUsername(), transaction.getDestUsername(), transaction.getAmount(),
+                                crypto.getPubKeyGrpc(transaction.getSource().toByteArray()), crypto.getPubKeyGrpc(transaction.getDestination().toByteArray()),
+                                transaction.getWid(), transaction.getSignature().toByteArray()));
+                    }
+                    client.setBalance(balance);
+                    client.setPending(pending);
+                    client.setWid(wid);
+                    client.setRid(rid);
+                    client.setPairSign(pairSign);
+                }
+                System.out.println("Successful write back!");
+                message = "valid";
+                saveHandler.saveState();
+
+            } else {
+                System.out.println("Not write back!");
+            }
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
+            message = "Something wrong with the keys!";
+        }
+
+        String finalString = keyPair.getPublic().toString() + message;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        CheckWriteBackResponse response = CheckWriteBackResponse.newBuilder().setMessage(message)
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
 }

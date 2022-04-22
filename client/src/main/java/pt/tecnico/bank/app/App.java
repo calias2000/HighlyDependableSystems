@@ -117,6 +117,37 @@ public class App {
                 }
                 System.out.println();
             }
+
+            try {
+
+                byte[] pairSign = response.getPairSign().toByteArray();
+                PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+
+                String writeBackString = String.valueOf(response.getBalance()) + pending + response.getWid() + Arrays.toString(pairSign)
+                        + response.getRid() + publicKey1.toString() + keyPair.getPublic().toString();
+
+                System.out.println(writeBackString.hashCode());
+
+
+                byte[] writeBackSignature = crypto.getSignature(writeBackString, keyPair.getPrivate());
+
+                CheckWriteBackRequest request1 = CheckWriteBackRequest.newBuilder()
+                        .addAllTransactions(pending)
+                        .setBalance(response.getBalance())
+                        .setWid(response.getWid())
+                        .setPairSign(ByteString.copyFrom(pairSign))
+                        .setRid(response.getRid())
+                        .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
+                        .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                        .setSignature(ByteString.copyFrom(writeBackSignature))
+                        .build();
+
+                frontend.checkWriteBack(request1);
+
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                System.out.println("Something wrong with the algorithm!");
+            }
+
         } else {
             System.out.println(response.getMessage());
         }

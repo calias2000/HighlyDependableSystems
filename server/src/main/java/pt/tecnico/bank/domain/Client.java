@@ -39,11 +39,13 @@ public class Client implements Serializable {
     public void addPending (Transactions transaction) {
         this.pending.add(transaction);
     }
+    public void setPending (List<Transactions> list) { this.pending = list; }
 
     public List<Transactions> getHistory() { return history; }
     public void addHistory (Transactions transaction) {
         this.history.add(transaction);
     }
+    public void setHistory (List<Transactions> list) { this.history = list; }
 
     public int getWid() { return this.wid; }
     public int getRid() { return this.rid; }

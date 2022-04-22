@@ -407,6 +407,22 @@ public class ServerFrontend implements AutoCloseable {
         }
     }
 
+    public void checkWriteBack(CheckWriteBackRequest request) {
+
+        RespCollector collector = new RespCollector();
+        CountDownLatch finishLatch = new CountDownLatch(quorum);
+
+        for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
+            stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkWriteBack(request, new Observer<>(collector, finishLatch));
+        }
+
+        try {
+            finishLatch.await();
+        } catch (InterruptedException e) {
+            System.out.println("Error");
+        }
+    }
+
     @Override
     public final void close() {
         this.channels.forEach(ManagedChannel::shutdown);
