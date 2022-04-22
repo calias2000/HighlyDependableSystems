@@ -407,7 +407,7 @@ public class ServerFrontend implements AutoCloseable {
         }
     }
 
-    public void checkWriteBack(CheckWriteBackRequest request) {
+    public CheckWriteBackResponse checkWriteBack(CheckWriteBackRequest request) {
 
         RespCollector collector = new RespCollector();
         CountDownLatch finishLatch = new CountDownLatch(quorum);
@@ -421,9 +421,35 @@ public class ServerFrontend implements AutoCloseable {
         } catch (InterruptedException e) {
             System.out.println("Error");
         }
+
+        Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
+
+        synchronized (collector.responses) {
+            while (iterator.hasNext()) {
+                CheckWriteBackResponse response = (CheckWriteBackResponse) iterator.next();
+                try {
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getMessage();
+
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                        iterator.remove();
+                        counter++;
+                    }
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                    System.out.println("Something wrong with the algorithm!");
+                }
+            }
+        }
+
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (CheckWriteBackResponse) collector.responses.get(0);
+        }
     }
 
-    public void auditWriteBack(AuditWriteBackRequest request) {
+    public AuditWriteBackResponse auditWriteBack(AuditWriteBackRequest request) {
 
         RespCollector collector = new RespCollector();
         CountDownLatch finishLatch = new CountDownLatch(quorum);
@@ -436,6 +462,32 @@ public class ServerFrontend implements AutoCloseable {
             finishLatch.await();
         } catch (InterruptedException e) {
             System.out.println("Error");
+        }
+
+        Iterator<Object> iterator = collector.responses.iterator();
+        int counter = 0;
+
+        synchronized (collector.responses) {
+            while (iterator.hasNext()) {
+                AuditWriteBackResponse response = (AuditWriteBackResponse) iterator.next();
+                try {
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getPublicKey().toByteArray());
+                    String finalString = serverPubKey.toString() + response.getMessage();
+
+                    if (!crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                        iterator.remove();
+                        counter++;
+                    }
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                    System.out.println("Something wrong with the algorithm!");
+                }
+            }
+        }
+
+        if (counter > this.byzantine) {
+            return null;
+        } else {
+            return (AuditWriteBackResponse) collector.responses.get(0);
         }
     }
 
