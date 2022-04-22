@@ -283,8 +283,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (crypto.verifySignature(finalString, publicKey, signature)) {
 
-
-                //ADEB
+                System.out.println("ADDEB STARTING");
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                adeb.echo(finalString);
+                instance.await();
+                System.out.println("ADEB finished!");
 
                 Transactions transaction = client.getPending().get(transfer);
 
@@ -405,8 +408,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
             String finalString = String.valueOf(balance) + transactions + wid + Arrays.toString(pairSign) + rid + publicKey.toString() + mypublicKey.toString();
 
-            System.out.println(finalString.hashCode());
-
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
 
                 Client client = clientList.get(publicKey);
@@ -455,8 +456,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
             String finalString = String.valueOf(rid) + transactions + publicKey.toString() + mypublicKey.toString();
-
-            System.out.println(finalString.hashCode());
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
 

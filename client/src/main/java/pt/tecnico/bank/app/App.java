@@ -126,9 +126,6 @@ public class App {
                 String writeBackString = String.valueOf(response.getBalance()) + pending + response.getWid() + Arrays.toString(pairSign)
                         + response.getRid() + publicKey1.toString() + keyPair.getPublic().toString();
 
-                System.out.println(writeBackString.hashCode());
-
-
                 byte[] writeBackSignature = crypto.getSignature(writeBackString, keyPair.getPrivate());
 
                 CheckWriteBackRequest request1 = CheckWriteBackRequest.newBuilder()
@@ -316,9 +313,6 @@ public class App {
                 PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
 
                 String auditBackString = String.valueOf(response.getRid()) + history + publicKey1.toString() + keyPair.getPublic().toString();
-
-                System.out.println(auditBackString.hashCode());
-
 
                 byte[] writeBackSignature = crypto.getSignature(auditBackString, keyPair.getPrivate());
 
