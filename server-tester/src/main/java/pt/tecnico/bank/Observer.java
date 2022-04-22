@@ -23,7 +23,6 @@ public class Observer<R> implements StreamObserver<R> {
 
     @Override
     public void onError(Throwable throwable) {
-        finishLatch.countDown();
     }
 
     @Override
