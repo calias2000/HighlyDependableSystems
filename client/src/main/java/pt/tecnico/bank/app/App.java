@@ -227,61 +227,68 @@ public class App {
                 .setNonce(nonce)
                 .build());
 
-        if (response1.getMessage().equals("valid")) {
-            Transaction auxTransaction = response1.getTransactions(transfer);
-            int future_balance = response1.getBalance() + auxTransaction.getAmount();
-
-            this.rid++;
-
-            int new_wid = response1.getWid() + 1;
-            String pairSignString = String.valueOf(future_balance) + new_wid;
-            byte[] pairSign = crypto.getSignature(pairSignString, privateKey);
-
+        if (response1 == null) {
+            System.out.println("No quorum achieved!");
+        }
+        else if (response1.getMessage().equals("valid")) {
             try {
+                Transaction auxTransaction = response1.getTransactions(transfer);
+                int future_balance = response1.getBalance() + auxTransaction.getAmount();
 
-                PublicKey sourceKey = crypto.getPubKeyGrpc(auxTransaction.getSource().toByteArray());
-                PublicKey destKey = crypto.getPubKeyGrpc(auxTransaction.getDestination().toByteArray());
-                String transactionString = auxTransaction.getSourceUsername() + auxTransaction.getDestUsername()
-                        + auxTransaction.getAmount() + sourceKey.toString() + destKey.toString() + new_wid;
+                this.rid++;
 
-                byte[] signatureTrans = crypto.getSignature(transactionString, privateKey);
+                int new_wid = response1.getWid() + 1;
+                String pairSignString = String.valueOf(future_balance) + new_wid;
+                byte[] pairSign = crypto.getSignature(pairSignString, privateKey);
 
-                Transaction toAuditTransaction = Transaction.newBuilder()
-                        .setSourceUsername(auxTransaction.getSourceUsername())
-                        .setDestUsername(auxTransaction.getDestUsername())
-                        .setAmount(auxTransaction.getAmount())
-                        .setSource(ByteString.copyFrom(sourceKey.getEncoded()))
-                        .setDestination(ByteString.copyFrom(destKey.getEncoded()))
-                        .setWid(new_wid)
-                        .setSignature(ByteString.copyFrom(signatureTrans))
-                        .build();
+                try {
 
-                byte[] signature = crypto.getSignature(publicKey.toString() + future_balance + new_wid + Arrays.toString(pairSign) + transfer + toAuditTransaction, privateKey);
+                    PublicKey sourceKey = crypto.getPubKeyGrpc(auxTransaction.getSource().toByteArray());
+                    PublicKey destKey = crypto.getPubKeyGrpc(auxTransaction.getDestination().toByteArray());
+                    String transactionString = auxTransaction.getSourceUsername() + auxTransaction.getDestUsername()
+                            + auxTransaction.getAmount() + sourceKey.toString() + destKey.toString() + new_wid;
 
-                ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
-                        .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                        .setFutureBalance(future_balance)
-                        .setWid(new_wid)
-                        .setPairSign(ByteString.copyFrom(pairSign))
-                        .setTransfer(transfer)
-                        .setToAuditTransaction(toAuditTransaction)
-                        .setSignature(ByteString.copyFrom(signature))
-                        .build();
+                    byte[] signatureTrans = crypto.getSignature(transactionString, privateKey);
 
-                ReceiveAmountResponse response = frontend.receiveAmount(request);
+                    Transaction toAuditTransaction = Transaction.newBuilder()
+                            .setSourceUsername(auxTransaction.getSourceUsername())
+                            .setDestUsername(auxTransaction.getDestUsername())
+                            .setAmount(auxTransaction.getAmount())
+                            .setSource(ByteString.copyFrom(sourceKey.getEncoded()))
+                            .setDestination(ByteString.copyFrom(destKey.getEncoded()))
+                            .setWid(new_wid)
+                            .setSignature(ByteString.copyFrom(signatureTrans))
+                            .build();
 
-                if (response == null) {
-                    System.out.println("No quorum achieved!");
-                } else if (response.getMessage().equals("valid")) {
-                    System.out.println("\nTransaction Accepted.\n");
-                } else {
-                    System.out.println("\n" + response.getMessage());
+                    byte[] signature = crypto.getSignature(publicKey.toString() + future_balance + new_wid + Arrays.toString(pairSign) + transfer + toAuditTransaction, privateKey);
+
+                    ReceiveAmountRequest request = ReceiveAmountRequest.newBuilder()
+                            .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                            .setFutureBalance(future_balance)
+                            .setWid(new_wid)
+                            .setPairSign(ByteString.copyFrom(pairSign))
+                            .setTransfer(transfer)
+                            .setToAuditTransaction(toAuditTransaction)
+                            .setSignature(ByteString.copyFrom(signature))
+                            .build();
+
+                    ReceiveAmountResponse response = frontend.receiveAmount(request);
+
+                    if (response == null) {
+                        System.out.println("No quorum achieved!");
+                    } else if (response.getMessage().equals("valid")) {
+                        System.out.println("\nTransaction Accepted.\n");
+                    } else {
+                        System.out.println("\n" + response.getMessage());
+                    }
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.println("Invalid transaction id.");
                 }
             } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
                 System.out.println("Something went wrong while getting keys...");
             }
         } else {
-            System.out.println("Unable to check this account.");
+            System.out.println(response1.getMessage());
         }
     }
 
@@ -304,6 +311,31 @@ public class App {
             this.rid++;
             List<Transaction> history = response.getTransactionsList();
 
+            try {
+
+                PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+
+                String auditBackString = String.valueOf(response.getRid()) + history + publicKey1.toString() + keyPair.getPublic().toString();
+
+                System.out.println(auditBackString.hashCode());
+
+
+                byte[] writeBackSignature = crypto.getSignature(auditBackString, keyPair.getPrivate());
+
+                AuditWriteBackRequest request1 = AuditWriteBackRequest.newBuilder()
+                        .addAllTransactions(history)
+                        .setRid(response.getRid())
+                        .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
+                        .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                        .setSignature(ByteString.copyFrom(writeBackSignature))
+                        .build();
+
+                frontend.auditWriteBack(request1);
+
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                System.out.println("Something wrong with the algorithm!");
+            }
+
             if (history.isEmpty()) {
                 System.out.println("\nNo history to be shown.\n");
             } else {
@@ -316,7 +348,6 @@ public class App {
                     }
                 }
                 System.out.println();
-
             }
         } else {
             System.out.println(response.getMessage());

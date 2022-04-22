@@ -446,4 +446,52 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
+
+    public void auditWriteBack(AuditWriteBackRequest request, StreamObserver<AuditWriteBackResponse> responseObserver){
+        String message = "";
+        List<Transaction> transactions = request.getTransactionsList();
+        int rid = request.getRid();
+        try {
+            PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+            PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
+            String finalString = String.valueOf(rid) + transactions + publicKey.toString() + mypublicKey.toString();
+
+            System.out.println(finalString.hashCode());
+
+            if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
+
+                Client client = clientList.get(publicKey);
+                List<Transactions> history = new ArrayList<>();
+
+                for (Transaction transaction : transactions) {
+                    history.add(new Transactions(transaction.getSourceUsername(), transaction.getDestUsername(), transaction.getAmount(),
+                            crypto.getPubKeyGrpc(transaction.getSource().toByteArray()), crypto.getPubKeyGrpc(transaction.getDestination().toByteArray()),
+                            transaction.getWid(), transaction.getSignature().toByteArray()));
+                }
+
+                client.setHistory(history);
+                client.setRid(rid);
+
+                System.out.println("Successful write back!");
+                message = "valid";
+                saveHandler.saveState();
+
+            } else {
+                System.out.println("Not write back!");
+            }
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
+            message = "Something wrong with the keys!";
+        }
+
+        String finalString = keyPair.getPublic().toString() + message;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        AuditWriteBackResponse response = AuditWriteBackResponse.newBuilder().setMessage(message)
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
 }

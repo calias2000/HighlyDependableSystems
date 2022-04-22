@@ -155,16 +155,25 @@ message CheckWriteBackResponse {
   string message = 1;
   bytes public_key = 2;
   bytes signature = 3;
+
+  //TO DO VERIFY SIGNATURE FRONTEND
 }
 
 message AuditWriteBackRequest {
   repeated Transaction transactions = 1;
 
   int32 rid = 2;
+  string message = 3;
+
+  bytes public_key = 4;
+  bytes my_public_key = 5;
+  bytes signature = 6;
 }
 
 message AuditWriteBackResponse {
-
+  string message = 1;
+  bytes public_key = 2;
+  bytes signature = 3;
 }
 
 
