@@ -143,12 +143,10 @@ message CheckWriteBackRequest {
   int32 wid = 3;
   bytes pairSign = 4;
 
-  int32 rid = 5;
+  bytes public_key = 5;
+  bytes my_public_key = 6;
 
-  bytes public_key = 6;
-  bytes my_public_key = 7;
-
-  bytes signature = 8;
+  bytes signature = 7;
 }
 
 message CheckWriteBackResponse {
@@ -162,12 +160,9 @@ message CheckWriteBackResponse {
 message AuditWriteBackRequest {
   repeated Transaction transactions = 1;
 
-  int32 rid = 2;
-  string message = 3;
-
-  bytes public_key = 4;
-  bytes my_public_key = 5;
-  bytes signature = 6;
+  bytes public_key = 2;
+  bytes my_public_key = 3;
+  bytes signature = 4;
 }
 
 message AuditWriteBackResponse {

@@ -150,6 +150,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     me.setRid(rid);
 
+                    saveHandler.saveState();
+
                     message = "valid";
 
                 } else {
@@ -159,7 +161,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 message = "No account found with that username.";
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             message = "Something wrong with the keys!";
         }
 
@@ -366,6 +368,8 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                     me.setRid(rid);
 
+                    saveHandler.saveState();
+
                     message = "valid";
 
                 } else {
@@ -375,7 +379,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 message = "No account found with that username.";
             }
 
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
             message = "Something wrong with the keys!";
         }
 
@@ -402,11 +406,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int balance = request.getBalance();
         int wid = request.getWid();
         byte [] pairSign = request.getPairSign().toByteArray();
-        int rid = request.getRid();
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
-            String finalString = String.valueOf(balance) + transactions + wid + Arrays.toString(pairSign) + rid + publicKey.toString() + mypublicKey.toString();
+            String finalString = String.valueOf(balance) + transactions + wid + Arrays.toString(pairSign) + publicKey.toString() + mypublicKey.toString();
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
 
@@ -450,11 +453,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
     public void auditWriteBack(AuditWriteBackRequest request, StreamObserver<AuditWriteBackResponse> responseObserver){
         String message = "";
         List<Transaction> transactions = request.getTransactionsList();
-        int rid = request.getRid();
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
-            String finalString = String.valueOf(rid) + transactions + publicKey.toString() + mypublicKey.toString();
+            String finalString = transactions + publicKey.toString() + mypublicKey.toString();
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
 
@@ -468,7 +470,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 }
 
                 client.setHistory(history);
-                client.setRid(rid);
 
                 System.out.println("Successful write back!");
                 message = "valid";

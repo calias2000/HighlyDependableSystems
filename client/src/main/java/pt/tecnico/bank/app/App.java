@@ -120,7 +120,7 @@ public class App {
                 PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
 
                 String writeBackString = String.valueOf(response.getBalance()) + pending + response.getWid() + Arrays.toString(pairSign)
-                        + response.getRid() + publicKey1.toString() + keyPair.getPublic().toString();
+                        + publicKey1.toString() + keyPair.getPublic().toString();
 
                 byte[] writeBackSignature = crypto.getSignature(writeBackString, keyPair.getPrivate());
 
@@ -129,7 +129,6 @@ public class App {
                         .setBalance(response.getBalance())
                         .setWid(response.getWid())
                         .setPairSign(ByteString.copyFrom(pairSign))
-                        .setRid(response.getRid())
                         .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
                         .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                         .setSignature(ByteString.copyFrom(writeBackSignature))
@@ -317,13 +316,12 @@ public class App {
 
                 PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
 
-                String auditBackString = String.valueOf(response.getRid()) + history + publicKey1.toString() + keyPair.getPublic().toString();
+                String auditBackString = history + publicKey1.toString() + keyPair.getPublic().toString();
 
                 byte[] writeBackSignature = crypto.getSignature(auditBackString, keyPair.getPrivate());
 
                 AuditWriteBackRequest request1 = AuditWriteBackRequest.newBuilder()
                         .addAllTransactions(history)
-                        .setRid(response.getRid())
                         .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
                         .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                         .setSignature(ByteString.copyFrom(writeBackSignature))
