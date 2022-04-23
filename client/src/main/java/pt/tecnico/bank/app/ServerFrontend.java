@@ -221,10 +221,16 @@ public class ServerFrontend implements AutoCloseable {
                     .setConcatenated(ByteString.copyFrom(concatenated))
                     .setSignature(request.getSignature())
                     .build();
-            try {
-                stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(checkRequest, new Observer<>(collector, finishLatch));
-            } catch (StatusRuntimeException e) {
-                System.out.println("Stub error");
+
+            while (true) {
+                try {
+                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(checkRequest, new Observer<>(collector, finishLatch));
+                    break;
+                } catch (StatusRuntimeException e) {
+                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
+                        System.out.println("Stub error");
+                    }
+                }
             }
             port++;
         }
@@ -309,7 +315,16 @@ public class ServerFrontend implements AutoCloseable {
         CountDownLatch finishLatch = new CountDownLatch(quorum);
 
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
-            stub.withDeadlineAfter(3, TimeUnit.SECONDS).sendAmount(request, new Observer<>(collector, finishLatch));
+            while (true) {
+                try {
+                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).sendAmount(request, new Observer<>(collector, finishLatch));
+                    break;
+                } catch (StatusRuntimeException e) {
+                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
+                        System.out.println("Stub error");
+                    }
+                }
+            }
         }
 
         try {
@@ -361,7 +376,16 @@ public class ServerFrontend implements AutoCloseable {
         CountDownLatch finishLatch = new CountDownLatch(quorum);
 
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
-            stub.withDeadlineAfter(3, TimeUnit.SECONDS).receiveAmount(request, new Observer<>(collector, finishLatch));
+            while (true) {
+                try {
+                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).receiveAmount(request, new Observer<>(collector, finishLatch));
+                    break;
+                } catch (StatusRuntimeException e) {
+                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
+                        System.out.println("Stub error");
+                    }
+                }
+            }
         }
 
         try {
@@ -429,8 +453,16 @@ public class ServerFrontend implements AutoCloseable {
                     .setConcatenated(ByteString.copyFrom(concatenated))
                     .setSignature(request.getSignature())
                     .build();
-
-            stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));
+            while (true) {
+                try {
+                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));
+                    break;
+                } catch (StatusRuntimeException e) {
+                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
+                        System.out.println("Stub error");
+                    }
+                }
+            }
             port++;
         }
 
