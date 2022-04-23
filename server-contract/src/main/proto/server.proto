@@ -17,6 +17,22 @@ message Transaction {
   bytes signature = 7;
 }
 
+message ProofOfWorkRequest {
+  bytes public_key = 1;
+  int32 nonce = 2;
+  bytes signature = 4;
+}
+
+message ProofOfWorkResponse {
+  int32 nonce = 1;
+  bytes challenge = 2;
+  bytes server_pubkey = 3;
+  string message = 4;
+  int32 port = 5;
+  bytes signature = 6;
+}
+
+
 message PingRequest {
   string input = 1;
 }
@@ -123,6 +139,8 @@ message AuditRequest {
   bytes my_public_key = 2;
   int32 nonce = 3;
   int32 rid = 4;
+  int64 pow = 5;
+  bytes concatenated = 6;
 }
 
 message AuditResponse {
@@ -153,8 +171,6 @@ message CheckWriteBackResponse {
   string message = 1;
   bytes public_key = 2;
   bytes signature = 3;
-
-  //TO DO VERIFY SIGNATURE FRONTEND
 }
 
 message AuditWriteBackRequest {
@@ -174,6 +190,7 @@ message AuditWriteBackResponse {
 
 service ServerService {
   rpc ping(PingRequest) returns (PingResponse);
+  rpc proof(ProofOfWorkRequest) returns (ProofOfWorkResponse);
   rpc rid(RidRequest) returns (RidResponse);
   rpc openAccount(OpenAccountRequest) returns (OpenAccountResponse);
   rpc sendAmount(SendAmountRequest) returns (SendAmountResponse);

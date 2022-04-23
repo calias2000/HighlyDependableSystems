@@ -69,6 +69,47 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         responseObserver.onCompleted();
     }
 
+    public void proof(ProofOfWorkRequest request, StreamObserver<ProofOfWorkResponse> responseObserver) {
+
+        int nonce = request.getNonce();
+        String message = "";
+        byte [] bytes = new byte[256];
+
+        try {
+            PublicKey myPublicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+
+            String proofSignString = nonce + myPublicKey.toString();
+
+            if (crypto.verifySignature(proofSignString, myPublicKey, request.getSignature().toByteArray())){
+
+                SecureRandom secureRandom = new SecureRandom();
+                secureRandom.nextBytes(bytes);
+
+                nonce++;
+                message = "valid";
+            } else {
+                message = "Incorrect signature.";
+            }
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            message = "Something wrong with the keys!";
+        }
+
+        String finalString = nonce + Arrays.toString(bytes) + keyPair.getPublic().toString() + message + port;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        ProofOfWorkResponse response = ProofOfWorkResponse.newBuilder()
+                .setNonce(nonce)
+                .setChallenge(ByteString.copyFrom(bytes))
+                .setServerPubkey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setMessage(message)
+                .setPort(port)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
     public void openAccount(OpenAccountRequest request, StreamObserver<OpenAccountResponse> responseObserver) {
         String message = "";
 
@@ -214,7 +255,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (crypto.verifySignature(finalString, keySender, signature)) {
 
-                System.out.println("ADDEB STARTING");
+                System.out.println("\nADEB STARTING SEND AMOUNT");
                 ADEBInstance instance = adebInstanceManager.getInstance(finalString);
                 adeb.echo(finalString);
                 instance.await();
@@ -238,7 +279,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                         clientSender.setBalance(new_balance);
                         clientSender.setWid(wid);
                         clientSender.setPairSign(pairSign);
-                        System.out.println("CLIENT WID " + clientSender.getWid() + "\nCLIENT RID " + clientSender.getRid());
 
                         saveHandler.saveState();
                     }
@@ -285,7 +325,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (crypto.verifySignature(finalString, publicKey, signature)) {
 
-                System.out.println("ADDEB STARTING");
+                System.out.println("\nADEB STARTING RECEIVE AMOUNT");
                 ADEBInstance instance = adebInstanceManager.getInstance(finalString);
                 adeb.echo(finalString);
                 instance.await();
@@ -345,38 +385,42 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
 
-            if (clientList.containsKey(publicKey)) {
+            if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
+                if (clientList.containsKey(publicKey)) {
 
-                Client client = clientList.get(publicKey);
-                Client me = clientList.get(mypublicKey);
+                    Client client = clientList.get(publicKey);
+                    Client me = clientList.get(mypublicKey);
 
-                if (!me.getEventList().contains(nonce)) {
+                    if (!me.getEventList().contains(nonce)) {
 
-                    me.addEvent(nonce);
+                        me.addEvent(nonce);
 
-                    for (Transactions transaction : client.getHistory()){
-                        transactions.add(Transaction.newBuilder()
-                                .setSourceUsername(transaction.getSenderUsername())
-                                .setDestUsername(transaction.getDestUsername())
-                                .setAmount(transaction.getValue())
-                                .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
-                                .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
-                                .setWid(transaction.getWid())
-                                .setSignature(ByteString.copyFrom(transaction.getSignature()))
-                                .build());
+                        for (Transactions transaction : client.getHistory()) {
+                            transactions.add(Transaction.newBuilder()
+                                    .setSourceUsername(transaction.getSenderUsername())
+                                    .setDestUsername(transaction.getDestUsername())
+                                    .setAmount(transaction.getValue())
+                                    .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
+                                    .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
+                                    .setWid(transaction.getWid())
+                                    .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                    .build());
+                        }
+
+                        me.setRid(rid);
+
+                        saveHandler.saveState();
+
+                        message = "valid";
+
+                    } else {
+                        message = "Replay attack!";
                     }
-
-                    me.setRid(rid);
-
-                    saveHandler.saveState();
-
-                    message = "valid";
-
                 } else {
-                    message = "Replay attack!";
+                    message = "No account found with that username.";
                 }
             } else {
-                message = "No account found with that username.";
+                message = "No proof of work!";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
@@ -412,6 +456,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             String finalString = String.valueOf(balance) + transactions + wid + Arrays.toString(pairSign) + publicKey.toString() + mypublicKey.toString();
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
+
+                System.out.println("\nADEB STARTING CHECK WRITE BACK");
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                adeb.echo(finalString);
+                instance.await();
+                System.out.println("ADEB finished!");
 
                 Client client = clientList.get(publicKey);
                 List<Transactions> pending = new ArrayList<>();
@@ -459,6 +509,12 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             String finalString = transactions + publicKey.toString() + mypublicKey.toString();
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
+
+                System.out.println("\nADEB STARTING AUDIT WRITE BACK");
+                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                adeb.echo(finalString);
+                instance.await();
+                System.out.println("ADEB finished!");
 
                 Client client = clientList.get(publicKey);
                 List<Transactions> history = new ArrayList<>();

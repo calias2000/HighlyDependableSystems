@@ -6,14 +6,8 @@ import io.grpc.ManagedChannelBuilder;
 import pt.tecnico.bank.grpc.ADEBServiceGrpc;
 import pt.tecnico.bank.grpc.EchoRequest;
 import pt.tecnico.bank.grpc.ReadyRequest;
-import pt.tecnico.bank.grpc.ServerServiceGrpc;
-
-import java.nio.charset.StandardCharsets;
-import java.security.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static pt.tecnico.bank.ServerMain.*;
@@ -25,7 +19,6 @@ public class ADEB implements AutoCloseable {
     private final List<ADEBServiceGrpc.ADEBServiceStub> stubs;
     private int nServers;
     private String serverName;
-    private String input;
     private int quorum;
 
     public ADEB(int byzantine, String serverName) {

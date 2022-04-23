@@ -1,11 +1,13 @@
 package pt.tecnico.bank.app;
 
+import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.grpc.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 public class App {
@@ -295,6 +297,8 @@ public class App {
 
     public void audit(PublicKey publicKey, KeyPair keyPair, String username){
 
+        frontend.keyPair = keyPair;
+
         int random = crypto.getSecureRandom();
 
         AuditRequest request = AuditRequest.newBuilder()
@@ -336,6 +340,8 @@ public class App {
             if (history.isEmpty()) {
                 System.out.println("\nNo history to be shown.\n");
             } else {
+
+                System.out.println("\nHistory:\n");
 
                 for (Transaction transaction : history) {
                     if (transaction.getSourceUsername().equals(username)) {

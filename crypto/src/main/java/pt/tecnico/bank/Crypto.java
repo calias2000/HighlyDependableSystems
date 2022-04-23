@@ -3,6 +3,7 @@ package pt.tecnico.bank;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
@@ -12,6 +13,8 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 public class Crypto {
+
+    private int powDifficulty = 2;
 
     public Crypto() { }
 
@@ -122,6 +125,27 @@ public class Crypto {
 
     public PublicKey getPubKeyGrpc(byte[] pubKey) throws NoSuchAlgorithmException, InvalidKeySpecException {
         return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pubKey));
+    }
+
+    public long generateProofOfWork(byte[] bytes) {
+        long pow = 0L;
+        while (!verifyProofOfWork(bytes, pow)) pow++;
+        return pow;
+    }
+
+    public boolean verifyProofOfWork(byte[] bytes, long pow) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash =
+                    md.digest(ByteBuffer.allocate(bytes.length + Long.BYTES).put(bytes).putLong(pow).array());
+            for (int i = 0; i < this.powDifficulty; i++) {
+                if (hash[i] != 0) return false;
+            }
+            return true;
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("No such algorithm!");
+            return false;
+        }
     }
 
 }

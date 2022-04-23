@@ -1,11 +1,15 @@
 package pt.tecnico.bank.app;
 
+import com.google.common.primitives.Bytes;
+import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.grpc.*;
 
+import java.io.ByteArrayOutputStream;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.*;
@@ -19,14 +23,18 @@ public class ServerFrontend implements AutoCloseable {
     private final int quorum;
     private final int byzantine;
     private final Crypto crypto;
+    private HashMap<Integer, byte[]> proofs;
+    private int numberChannels;
+    KeyPair keyPair;
 
     public ServerFrontend(int value, Crypto crypto) {
         this.channels = new ArrayList<>();
         this.stubs = new ArrayList<>();
-        int numberChannels = 3 * value + 1;
+        this.numberChannels = 3 * value + 1;
         this.byzantine = value;
         this.quorum = (numberChannels + this.byzantine) / 2 + 1;
         this.crypto = crypto;
+        this.proofs = new HashMap<>();
 
         for (int i = 0; i < numberChannels; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();
@@ -36,6 +44,50 @@ public class ServerFrontend implements AutoCloseable {
     }
 
     /* ---------- Services ---------- */
+
+    public void proof() {
+
+        RespCollector collector = new RespCollector();
+        CountDownLatch finishLatch = new CountDownLatch(this.numberChannels);
+
+        int nonce = crypto.getSecureRandom();
+
+        String proofString = nonce + keyPair.getPublic().toString();
+        byte[] signature = crypto.getSignature(proofString, keyPair.getPrivate());
+        ProofOfWorkRequest proofRequest = ProofOfWorkRequest.newBuilder().setNonce(nonce)
+                .setPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setSignature(ByteString.copyFrom(signature)).build();
+
+        for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
+            stub.withDeadlineAfter(3, TimeUnit.SECONDS).proof(proofRequest, new Observer<>(collector, finishLatch));
+        }
+
+        try {
+            finishLatch.await();
+        } catch (InterruptedException e) {
+            System.out.println("Error");
+        }
+
+        Iterator<Object> iterator = collector.responses.iterator();
+
+        synchronized (collector.responses) {
+            while (iterator.hasNext()) {
+                ProofOfWorkResponse response = (ProofOfWorkResponse) iterator.next();
+
+                try {
+                    PublicKey serverPubKey = crypto.getPubKeyGrpc(response.getServerPubkey().toByteArray());
+                    int nonceSever = response.getNonce();
+                    byte[] challenge = response.getChallenge().toByteArray();
+                    String finalString = nonceSever + Arrays.toString(challenge) + serverPubKey.toString() + response.getMessage() + response.getPort();
+                    if (crypto.verifySignature(finalString, serverPubKey, response.getSignature().toByteArray())) {
+                        proofs.put(response.getPort(), challenge);
+                    }
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+                    System.out.println("Something wrong with the algorithm!");
+                }
+            }
+        }
+    }
 
     public RidResponse rid(RidRequest request) {
         RespCollector collector = new RespCollector();
@@ -336,12 +388,30 @@ public class ServerFrontend implements AutoCloseable {
 
     public AuditResponse audit(AuditRequest request) {
 
-        RespCollector collector = new RespCollector();
+        proof();
 
+        RespCollector collector = new RespCollector();
         CountDownLatch finishLatch = new CountDownLatch(quorum);
 
+        int port = 8080;
+
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
-            stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(request, new Observer<>(collector, finishLatch));
+
+            byte [] challenge = proofs.get(port);
+            byte [] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
+            long pow = crypto.generateProofOfWork(concatenated);
+
+            AuditRequest auditRequest = AuditRequest.newBuilder()
+                    .setPublicKey(request.getPublicKey())
+                    .setMyPublicKey(request.getMyPublicKey())
+                    .setNonce(request.getNonce())
+                    .setRid(request.getRid())
+                    .setPow(pow)
+                    .setConcatenated(ByteString.copyFrom(concatenated))
+                    .build();
+
+            stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));
+            port++;
         }
 
         try {
