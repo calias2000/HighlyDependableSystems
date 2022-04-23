@@ -198,16 +198,35 @@ public class ServerFrontend implements AutoCloseable {
 
     public CheckAccountResponse checkAccount(CheckAccountRequest request) {
 
+        proof();
+
         RespCollector collector = new RespCollector();
 
         CountDownLatch finishLatch = new CountDownLatch(quorum);
 
+        int port = 8080;
+
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
+
+            byte [] challenge = proofs.get(port);
+            byte [] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
+            long pow = crypto.generateProofOfWork(concatenated);
+
+            CheckAccountRequest checkRequest = CheckAccountRequest.newBuilder()
+                    .setPublicKey(request.getPublicKey())
+                    .setMyPublicKey(request.getMyPublicKey())
+                    .setRid(request.getRid())
+                    .setNonce(request.getNonce())
+                    .setPow(pow)
+                    .setConcatenated(ByteString.copyFrom(concatenated))
+                    .setSignature(request.getSignature())
+                    .build();
             try {
-                stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(request, new Observer<>(collector, finishLatch));
+                stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(checkRequest, new Observer<>(collector, finishLatch));
             } catch (StatusRuntimeException e) {
                 System.out.println("Stub error");
             }
+            port++;
         }
 
         try {
@@ -408,6 +427,7 @@ public class ServerFrontend implements AutoCloseable {
                     .setRid(request.getRid())
                     .setPow(pow)
                     .setConcatenated(ByteString.copyFrom(concatenated))
+                    .setSignature(request.getSignature())
                     .build();
 
             stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));

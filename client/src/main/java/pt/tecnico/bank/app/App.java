@@ -86,11 +86,17 @@ public class App {
 
         int nonce = crypto.getSecureRandom();
 
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + new_rid + nonce;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
         CheckAccountRequest request = CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setRid(this.rid + 1)
                 .setNonce(nonce)
+                .setSignature(ByteString.copyFrom(signature))
                 .build();
 
         CheckAccountResponse response = frontend.checkAccount(request);
@@ -155,11 +161,17 @@ public class App {
 
         int nonce = crypto.getSecureRandom();
 
+        int new_rid = this.rid + 1;
+
+        String finalString1 = senderPubK.toString() + senderPubK.toString() + new_rid + nonce;
+        byte [] signature1 = crypto.getSignature(finalString1, senderPrivK);
+
         CheckAccountResponse response1 = frontend.checkAccount(CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(senderPubK.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(senderPubK.getEncoded()))
                 .setRid(this.rid + 1)
                 .setNonce(nonce)
+                .setSignature(ByteString.copyFrom(signature1))
                 .build());
 
         if (response1 == null) {
@@ -223,11 +235,17 @@ public class App {
 
         int nonce = crypto.getSecureRandom();
 
+        int new_rid = this.rid + 1;
+
+        String finalString1 = publicKey.toString() + publicKey.toString() + new_rid + nonce;
+        byte [] signature1 = crypto.getSignature(finalString1, privateKey);
+
         CheckAccountResponse response1 = frontend.checkAccount(CheckAccountRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setRid(this.rid + 1)
                 .setNonce(nonce)
+                .setSignature(ByteString.copyFrom(signature1))
                 .build());
 
         if (response1 == null) {
@@ -284,11 +302,12 @@ public class App {
                     } else {
                         System.out.println("\n" + response.getMessage());
                     }
-                } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Invalid transaction id.");
+                } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                    System.out.println("Something went wrong while getting keys...");
                 }
-            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
-                System.out.println("Something went wrong while getting keys...");
+            } catch (IndexOutOfBoundsException e) {
+                System.out.println("Invalid transaction id.");
+
             }
         } else {
             System.out.println(response1.getMessage());
@@ -297,15 +316,19 @@ public class App {
 
     public void audit(PublicKey publicKey, KeyPair keyPair, String username){
 
-        frontend.keyPair = keyPair;
-
         int random = crypto.getSecureRandom();
+
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + random + new_rid;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
 
         AuditRequest request = AuditRequest.newBuilder()
                 .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
                 .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
                 .setNonce(random)
                 .setRid(this.rid + 1)
+                .setSignature(ByteString.copyFrom(signature))
                 .build();
 
         AuditResponse response = frontend.audit(request);

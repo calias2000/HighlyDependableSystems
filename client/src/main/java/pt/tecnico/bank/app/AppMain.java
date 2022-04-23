@@ -14,6 +14,7 @@ import java.util.*;
 
 public class AppMain {
 
+
 	public static void main(String[] args) {
 
 		// Initialization of the server frontend and App object
@@ -24,8 +25,8 @@ public class AppMain {
 		Scanner scanner = new Scanner(System.in);
 		String scanned, receiverUsername, username, accountUsername = null, accountPassword;
 		int amount, transactionNumber;
-		KeyPair keyPair = null;
 
+		KeyPair keyPair = null;
 		boolean logout = true;
 		boolean login = false;
 
@@ -55,6 +56,7 @@ public class AppMain {
 						keyPair = getKeyPair(accountUsername, accountPassword);
 						if (app.openAccount(keyPair.getPublic(), accountUsername, keyPair.getPrivate())) {
 							logout = false;
+							frontend.keyPair = keyPair;
 						}
 					} else {
 						System.out.println("\nAccount already exists.");
@@ -69,6 +71,7 @@ public class AppMain {
 					if (checkCredentials(accountUsername, accountPassword)) {
 						keyPair = getKeyPair(accountUsername, accountPassword);
 						logout = false;
+						frontend.keyPair = keyPair;
 						System.out.println("\nSuccessfully logged in.");
 						app.getRid(keyPair.getPublic());
 					}

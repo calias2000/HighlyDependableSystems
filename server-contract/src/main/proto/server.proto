@@ -77,6 +77,9 @@ message CheckAccountRequest {
   bytes my_public_key = 2;
   int32 rid = 3;
   int32 nonce = 4;
+  int64 pow = 5;
+  bytes concatenated = 6;
+  bytes signature = 7;
 }
 
 message CheckAccountResponse {
@@ -141,6 +144,7 @@ message AuditRequest {
   int32 rid = 4;
   int64 pow = 5;
   bytes concatenated = 6;
+  bytes signature = 7;
 }
 
 message AuditResponse {

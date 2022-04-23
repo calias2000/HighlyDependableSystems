@@ -158,48 +158,62 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         int rid = request.getRid();
         int nonce = request.getNonce();
         byte [] pairSignature = new byte[0];
+        byte [] signature1 = request.getSignature().toByteArray();
 
         try {
 
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
 
-            if (clientList.containsKey(publicKey)) {
+            String finalString = publicKey.toString() + mypublicKey.toString() + rid + nonce;
 
-                Client client = clientList.get(publicKey);
-                Client me = clientList.get(mypublicKey);
 
-                balance = client.getBalance();
-                wid = client.getWid();
-                pairSignature = client.getPair_signature();
+            if (crypto.verifySignature(finalString, mypublicKey, signature1)) {
 
-                if (!me.getEventList().contains(nonce)) {
+                if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
 
-                    me.addEvent(nonce);
+                    if (clientList.containsKey(publicKey)) {
 
-                    for (Transactions transaction : client.getPending()){
-                        transactions.add(Transaction.newBuilder()
-                                .setSourceUsername(transaction.getSenderUsername())
-                                .setDestUsername(transaction.getDestUsername())
-                                .setAmount(transaction.getValue())
-                                .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
-                                .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
-                                .setWid(transaction.getWid())
-                                .setSignature(ByteString.copyFrom(transaction.getSignature()))
-                                .build());
+                        Client client = clientList.get(publicKey);
+                        Client me = clientList.get(mypublicKey);
+
+                        balance = client.getBalance();
+                        wid = client.getWid();
+                        pairSignature = client.getPair_signature();
+
+                        if (!me.getEventList().contains(nonce)) {
+
+                            me.addEvent(nonce);
+
+                            for (Transactions transaction : client.getPending()) {
+                                transactions.add(Transaction.newBuilder()
+                                        .setSourceUsername(transaction.getSenderUsername())
+                                        .setDestUsername(transaction.getDestUsername())
+                                        .setAmount(transaction.getValue())
+                                        .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
+                                        .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
+                                        .setWid(transaction.getWid())
+                                        .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                        .build());
+                            }
+
+                            me.setRid(rid);
+
+                            saveHandler.saveState();
+
+                            message = "valid";
+
+                        } else {
+                            message = "Replay attack!";
+                        }
+                    } else {
+                        message = "No account found with that username.";
                     }
-
-                    me.setRid(rid);
-
-                    saveHandler.saveState();
-
-                    message = "valid";
-
                 } else {
-                    message = "Replay attack!";
+                    message = "No proof of work!";
                 }
             } else {
-                message = "No account found with that username.";
+                message = "Wrong signing from user!";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
@@ -255,35 +269,39 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             if (crypto.verifySignature(finalString, keySender, signature)) {
 
-                System.out.println("\nADEB STARTING SEND AMOUNT");
-                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
-                adeb.echo(finalString);
-                instance.await();
-                System.out.println("ADEB finished!");
+                if (clientSender.getWid() < wid) {
+                    System.out.println("\nADEB STARTING SEND AMOUNT");
+                    ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                    adeb.echo(finalString);
+                    instance.await();
+                    System.out.println("ADEB finished!");
 
-                if (clientSender.getWid() < wid && clientSender.getBalance() - amount == new_balance) {
+                    if (clientSender.getWid() < wid && clientSender.getBalance() - amount == new_balance) {
 
-                    Client clientReceiver = clientList.get(keyReceiver);
+                        Client clientReceiver = clientList.get(keyReceiver);
 
-                    if (clientSender.getBalance() < amount) {
-                        message = "Sender account does not have enough balance.";
-                    } else if (0 >= amount) {
-                        message = "Invalid amount, must be > 0.";
+                        if (clientSender.getBalance() < amount) {
+                            message = "Sender account does not have enough balance.";
+                        } else if (0 >= amount) {
+                            message = "Invalid amount, must be > 0.";
+                        } else {
+
+                            message = "valid";
+
+                            clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+                            clientSender.addHistory(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
+
+                            clientSender.setBalance(new_balance);
+                            clientSender.setWid(wid);
+                            clientSender.setPairSign(pairSign);
+
+                            saveHandler.saveState();
+                        }
                     } else {
-
-                        message = "valid";
-
-                        clientReceiver.addPending(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
-                        clientSender.addHistory(new Transactions(sourceUsername, destUsername, amount, keySender, keyReceiver, wid, transactionSignature));
-
-                        clientSender.setBalance(new_balance);
-                        clientSender.setWid(wid);
-                        clientSender.setPairSign(pairSign);
-
-                        saveHandler.saveState();
+                        message = "Wrong balance or wid.";
                     }
                 } else {
-                    message = "Wrong balance or wid.";
+                    message = "Replay attack!";
                 }
             } else {
                 message = "Incorrect signature or incorrect transaction id.";
@@ -319,37 +337,40 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
         try {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             String finalString = publicKey.toString() + new_balance + wid + Arrays.toString(pairSign) + transfer + toAuditTransaction;
-            byte [] signature = request.getSignature().toByteArray();
 
             Client client = clientList.get(publicKey);
 
-            if (crypto.verifySignature(finalString, publicKey, signature)) {
+            if (crypto.verifySignature(finalString, publicKey, request.getSignature().toByteArray())) {
 
-                System.out.println("\nADEB STARTING RECEIVE AMOUNT");
-                ADEBInstance instance = adebInstanceManager.getInstance(finalString);
-                adeb.echo(finalString);
-                instance.await();
-                System.out.println("ADEB finished!");
+                if (client.getWid() < wid) {
+                    System.out.println("\nADEB STARTING RECEIVE AMOUNT");
+                    ADEBInstance instance = adebInstanceManager.getInstance(finalString);
+                    adeb.echo(finalString);
+                    instance.await();
+                    System.out.println("ADEB finished!");
 
-                Transactions transaction = client.getPending().get(transfer);
+                    Transactions transaction = client.getPending().get(transfer);
 
-                if (client.getWid() < wid && transfer + 1 <= client.getPending().size() && transaction.getValue() + client.getBalance() == new_balance) {
-                    message = "valid";
+                    if (client.getWid() < wid && transfer + 1 <= client.getPending().size() && transaction.getValue() + client.getBalance() == new_balance) {
+                        message = "valid";
 
-                    client.setBalance(new_balance);
+                        client.setBalance(new_balance);
 
-                    client.removePending(transfer);
-                    client.addHistory(new Transactions(toAuditTransaction.getSourceUsername(),
-                            toAuditTransaction.getDestUsername(), toAuditTransaction.getAmount(),
-                            crypto.getPubKeyGrpc(toAuditTransaction.getSource().toByteArray()),
-                            crypto.getPubKeyGrpc(toAuditTransaction.getDestination().toByteArray()),
-                            toAuditTransaction.getWid(), toAuditTransaction.getSignature().toByteArray()));
+                        client.removePending(transfer);
+                        client.addHistory(new Transactions(toAuditTransaction.getSourceUsername(),
+                                toAuditTransaction.getDestUsername(), toAuditTransaction.getAmount(),
+                                crypto.getPubKeyGrpc(toAuditTransaction.getSource().toByteArray()),
+                                crypto.getPubKeyGrpc(toAuditTransaction.getDestination().toByteArray()),
+                                toAuditTransaction.getWid(), toAuditTransaction.getSignature().toByteArray()));
 
-                    client.setWid(wid);
-                    client.setPairSign(pairSign);
-                    wid++;
+                        client.setWid(wid);
+                        client.setPairSign(pairSign);
+                        wid++;
 
-                    saveHandler.saveState();
+                        saveHandler.saveState();
+                    }
+                } else {
+                    message = "Replay attack!";
                 }
 
             } else {
@@ -385,42 +406,48 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             PublicKey publicKey = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
             PublicKey mypublicKey = crypto.getPubKeyGrpc(request.getMyPublicKey().toByteArray());
 
-            if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
-                if (clientList.containsKey(publicKey)) {
+            String finalString = publicKey.toString() + mypublicKey.toString() + nonce + rid;
 
-                    Client client = clientList.get(publicKey);
-                    Client me = clientList.get(mypublicKey);
+            if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
+                if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
+                    if (clientList.containsKey(publicKey)) {
 
-                    if (!me.getEventList().contains(nonce)) {
+                        Client client = clientList.get(publicKey);
+                        Client me = clientList.get(mypublicKey);
 
-                        me.addEvent(nonce);
+                        if (!me.getEventList().contains(nonce)) {
 
-                        for (Transactions transaction : client.getHistory()) {
-                            transactions.add(Transaction.newBuilder()
-                                    .setSourceUsername(transaction.getSenderUsername())
-                                    .setDestUsername(transaction.getDestUsername())
-                                    .setAmount(transaction.getValue())
-                                    .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
-                                    .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
-                                    .setWid(transaction.getWid())
-                                    .setSignature(ByteString.copyFrom(transaction.getSignature()))
-                                    .build());
+                            me.addEvent(nonce);
+
+                            for (Transactions transaction : client.getHistory()) {
+                                transactions.add(Transaction.newBuilder()
+                                        .setSourceUsername(transaction.getSenderUsername())
+                                        .setDestUsername(transaction.getDestUsername())
+                                        .setAmount(transaction.getValue())
+                                        .setSource(ByteString.copyFrom(transaction.getSourceKey().getEncoded()))
+                                        .setDestination(ByteString.copyFrom(transaction.getDestKey().getEncoded()))
+                                        .setWid(transaction.getWid())
+                                        .setSignature(ByteString.copyFrom(transaction.getSignature()))
+                                        .build());
+                            }
+
+                            me.setRid(rid);
+
+                            saveHandler.saveState();
+
+                            message = "valid";
+
+                        } else {
+                            message = "Replay attack!";
                         }
-
-                        me.setRid(rid);
-
-                        saveHandler.saveState();
-
-                        message = "valid";
-
                     } else {
-                        message = "Replay attack!";
+                        message = "No account found with that username.";
                     }
                 } else {
-                    message = "No account found with that username.";
+                    message = "No proof of work!";
                 }
             } else {
-                message = "No proof of work!";
+                message = "Wrong signing from user!";
             }
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException e) {
