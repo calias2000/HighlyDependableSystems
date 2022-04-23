@@ -1,5 +1,6 @@
 package pt.tecnico.bank;
 
+import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import pt.tecnico.bank.domain.Client;
@@ -12,7 +13,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 import static io.grpc.Status.INVALID_ARGUMENT;
 import static pt.tecnico.bank.ServerMain.*;
@@ -85,8 +85,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                 SecureRandom secureRandom = new SecureRandom();
                 secureRandom.nextBytes(bytes);
 
+                clientList.get(myPublicKey).setChallenge(Bytes.concat(bytes, request.getPublicKey().toByteArray()));
+
                 nonce++;
                 message = "valid";
+
             } else {
                 message = "Incorrect signature.";
             }
@@ -167,12 +170,11 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
             String finalString = publicKey.toString() + mypublicKey.toString() + rid + nonce;
 
-
             if (crypto.verifySignature(finalString, mypublicKey, signature1)) {
 
-                if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
+                if (clientList.containsKey(publicKey)) {
 
-                    if (clientList.containsKey(publicKey)) {
+                    if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow()) && Arrays.equals(clientList.get(mypublicKey).getChallenge(), request.getConcatenated().toByteArray())) {
 
                         Client client = clientList.get(publicKey);
                         Client me = clientList.get(mypublicKey);
@@ -207,10 +209,10 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                             message = "Replay attack!";
                         }
                     } else {
-                        message = "No account found with that username.";
+                        message = "No proof of work or wrong challenge!";
                     }
                 } else {
-                    message = "No proof of work!";
+                    message = "No account found with that username.";
                 }
             } else {
                 message = "Wrong signing from user!";
@@ -409,7 +411,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
             String finalString = publicKey.toString() + mypublicKey.toString() + nonce + rid;
 
             if (crypto.verifySignature(finalString, mypublicKey, request.getSignature().toByteArray())) {
-                if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow())) {
+                if (crypto.verifyProofOfWork(request.getConcatenated().toByteArray(), request.getPow()) && Arrays.equals(clientList.get(mypublicKey).getChallenge(), request.getConcatenated().toByteArray())) {
                     if (clientList.containsKey(publicKey)) {
 
                         Client client = clientList.get(publicKey);
@@ -444,7 +446,7 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
                         message = "No account found with that username.";
                     }
                 } else {
-                    message = "No proof of work!";
+                    message = "No proof of work or wrong challenge!";
                 }
             } else {
                 message = "Wrong signing from user!";

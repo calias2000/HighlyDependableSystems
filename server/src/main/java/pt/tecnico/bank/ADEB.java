@@ -27,7 +27,7 @@ public class ADEB implements AutoCloseable {
         this.stubs = new ArrayList<>();
         this.nServers = 3*byzantine + 1;
         this.serverName = serverName;
-        this.quorum = (this.nServers + this.byzantine)/2 + 1;
+        this.quorum = 2 * byzantine + 1;
 
         for (int i = 0; i < nServers; i++){
             ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080 + i).usePlaintext().build();

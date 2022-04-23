@@ -32,7 +32,7 @@ public class ServerFrontend implements AutoCloseable {
         this.stubs = new ArrayList<>();
         this.numberChannels = 3 * value + 1;
         this.byzantine = value;
-        this.quorum = (numberChannels + this.byzantine) / 2 + 1;
+        this.quorum = 2 * value + 1;
         this.crypto = crypto;
         this.proofs = new HashMap<>();
 

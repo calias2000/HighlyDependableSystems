@@ -15,6 +15,7 @@ public class Client implements Serializable {
     private int rid;
     private byte [] pair_signature;
     private HashSet<Integer> eventList;
+    private byte[] challenge;
 
     public Client(String username, byte [] pair_signature) {
         this.username = username;
@@ -25,9 +26,8 @@ public class Client implements Serializable {
         this.rid = 0;
         this.pair_signature = pair_signature;
         this.eventList = new HashSet<>();
+        this.challenge = null;
     }
-
-    public String getUsername() { return this.username; }
 
     public int getBalance(){ return balance; }
     public void setBalance(int balance) { this.balance = balance; }
@@ -58,4 +58,7 @@ public class Client implements Serializable {
 
     public HashSet<Integer> getEventList() { return this.eventList; }
     public void addEvent(int nonce) { this.eventList.add(nonce); }
+
+    public byte[] getChallenge() { return this.challenge; }
+    public void setChallenge(byte[] challenge) { this.challenge = challenge; }
 }
