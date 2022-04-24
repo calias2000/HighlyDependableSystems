@@ -4,13 +4,18 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import pt.tecnico.bank.Crypto;
+import pt.tecnico.bank.grpc.AuditResponse;
 import pt.tecnico.bank.grpc.CheckAccountResponse;
+import pt.tecnico.bank.grpc.ReceiveAmountResponse;
 
 import java.security.KeyPair;
 import java.security.PublicKey;
-import static org.junit.jupiter.api.Assertions.*;
 
-public class BCheckAccountIT {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+
+public class EAuditIT {
 
     private ServerFrontend frontend;
     private Crypto crypto;
@@ -31,53 +36,34 @@ public class BCheckAccountIT {
     }
 
     @Test
-    public void checkAccountTest() {
+    public void auditTest() {
         String username = "diogo";
         String password = "password1";
         KeyPair keyPair = crypto.getKeyPair(username, password);
         frontend.keyPair = keyPair;
-        String usernameToCheck = "goncalo";
+        String usernameToCheck = "diogo";
         PublicKey publicKey = crypto.getPubKeyfromCert(usernameToCheck);
 
-        CheckAccountResponse response = app.checkAccount(publicKey, keyPair);
+        AuditResponse response = app.audit(publicKey, keyPair, usernameToCheck);
         assertEquals("valid", response.getMessage());
-        assertEquals(500, response.getBalance());
-        assertEquals(0, response.getTransactionsList().size());
+        assertEquals(1, response.getTransactionsList().size());
         assertEquals(1, response.getRid());
-        assertEquals(0, response.getWid());
+        assertEquals("goncalo", response.getTransactionsList().get(0).getDestUsername());
     }
 
     @Test
-    public void checkAccountTest2() {
-        String username = "bernardo";
-        String password = "password1";
-        KeyPair keyPair = crypto.getKeyPair(username, password);
-        frontend.keyPair = keyPair;
-        String usernameToCheck = "goncalo";
-        PublicKey publicKey = crypto.getPubKeyfromCert(usernameToCheck);
-
-        CheckAccountResponse response = app.checkAccount(publicKey, keyPair);
-        assertEquals("valid", response.getMessage());
-        assertEquals(500, response.getBalance());
-        assertEquals(0, response.getTransactionsList().size());
-        assertEquals(1, response.getRid());
-        assertEquals(0, response.getWid());
-    }
-
-    @Test
-    public void checkAccountTest3() {
+    public void auditTest2() {
         String username = "goncalo";
         String password = "password1";
         KeyPair keyPair = crypto.getKeyPair(username, password);
         frontend.keyPair = keyPair;
-        String usernameToCheck = "bernardo";
+        String usernameToCheck = "goncalo";
         PublicKey publicKey = crypto.getPubKeyfromCert(usernameToCheck);
 
-        CheckAccountResponse response = app.checkAccount(publicKey, keyPair);
+        AuditResponse response = app.audit(publicKey, keyPair, usernameToCheck);
         assertEquals("valid", response.getMessage());
-        assertEquals(500, response.getBalance());
-        assertEquals(0, response.getTransactionsList().size());
+        assertEquals(1, response.getTransactionsList().size());
         assertEquals(1, response.getRid());
-        assertEquals(0, response.getWid());
+        assertEquals("diogo", response.getTransactionsList().get(0).getSourceUsername());
     }
 }

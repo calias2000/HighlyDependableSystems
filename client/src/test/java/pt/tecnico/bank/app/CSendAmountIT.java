@@ -37,6 +37,7 @@ public class CSendAmountIT {
         String username = "diogo";
         String password = "password1";
         KeyPair keyPair = crypto.getKeyPair(username, password);
+        frontend.keyPair = keyPair;
         String usernameToSend = "goncalo";
         PublicKey publicKey = crypto.getPubKeyfromCert(usernameToSend);
 
@@ -50,6 +51,7 @@ public class CSendAmountIT {
         assertEquals(1, responseCheckOther.getTransactionsList().size());
         assertEquals(50, responseCheckOther.getTransactionsList().get(0).getAmount());
         assertEquals("diogo", responseCheckOther.getTransactionsList().get(0).getSourceUsername());
+        assertEquals(0, responseCheckOther.getWid());
 
         CheckAccountResponse responseCheckMe = app.checkAccount(keyPair.getPublic(), keyPair);
         assertEquals("valid", responseCheckMe.getMessage());
@@ -58,34 +60,28 @@ public class CSendAmountIT {
     }
 
     @Test
-    public void checkAccountTest2() {
+    public void sendAmountNotEnoughBalance() {
         String username = "bernardo";
         String password = "password1";
         KeyPair keyPair = crypto.getKeyPair(username, password);
-        String usernameToCheck = "goncalo";
-        PublicKey publicKey = crypto.getPubKeyfromCert(usernameToCheck);
+        frontend.keyPair = keyPair;
+        String usernameToSend = "goncalo";
+        PublicKey publicKey = crypto.getPubKeyfromCert(usernameToSend);
 
-        CheckAccountResponse response = app.checkAccount(publicKey, keyPair);
-        assertEquals("valid", response.getMessage());
-        assertEquals(500, response.getBalance());
-        assertEquals(0, response.getTransactionsList().size());
-        assertEquals(1, response.getRid());
-        assertEquals(0, response.getWid());
+        SendAmountResponse response = app.sendAmount(keyPair.getPublic(), publicKey, 600, keyPair.getPrivate(), username, usernameToSend);
+        assertEquals("Sender account does not have enough balance.", response.getMessage());
     }
 
     @Test
-    public void checkAccountTest3() {
-        String username = "goncalo";
+    public void sendAmountNegativeAmount() {
+        String username = "bernardo";
         String password = "password1";
         KeyPair keyPair = crypto.getKeyPair(username, password);
-        String usernameToCheck = "bernardo";
-        PublicKey publicKey = crypto.getPubKeyfromCert(usernameToCheck);
+        frontend.keyPair = keyPair;
+        String usernameToSend = "goncalo";
+        PublicKey publicKey = crypto.getPubKeyfromCert(usernameToSend);
 
-        CheckAccountResponse response = app.checkAccount(publicKey, keyPair);
-        assertEquals("valid", response.getMessage());
-        assertEquals(500, response.getBalance());
-        assertEquals(0, response.getTransactionsList().size());
-        assertEquals(1, response.getRid());
-        assertEquals(0, response.getWid());
+        SendAmountResponse response = app.sendAmount(keyPair.getPublic(), publicKey, -20, keyPair.getPrivate(), username, usernameToSend);
+        assertEquals("Invalid amount, must be > 0.", response.getMessage());
     }
 }

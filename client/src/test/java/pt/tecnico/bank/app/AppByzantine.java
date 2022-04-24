@@ -1,23 +1,25 @@
 package pt.tecnico.bank.app;
 
-import com.google.common.primitives.Bytes;
 import com.google.protobuf.ByteString;
 import pt.tecnico.bank.Crypto;
 import pt.tecnico.bank.grpc.*;
-import java.security.*;
+
+import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
-public class App {
+public class AppByzantine {
 
-    ServerFrontend frontend;
+    ByzantineClientFrontend frontend;
     Crypto crypto;
     int balance;
     int rid;
 
-    public App(ServerFrontend frontend, Crypto crypto) {
+    public AppByzantine(ByzantineClientFrontend frontend, Crypto crypto) {
         this.frontend = frontend;
         this.crypto = crypto;
         this.balance = 500;
@@ -25,62 +27,6 @@ public class App {
     }
 
     // App methods that send requests to the ServerServiceImpl and returns responses to the user
-
-
-    public void ping() {
-
-        PingRequest request = PingRequest.newBuilder().setInput("Ping").build();
-        PingResponse response = frontend.ping(request);
-        if (response != null) {
-            System.out.println("\n" + response.getOutput() + "\n");
-        }
-    }
-
-    public void getRid(PublicKey pubKey) {
-
-        RidResponse response = frontend.rid(RidRequest.newBuilder().setPublicKey(ByteString.copyFrom(pubKey.getEncoded())).build());
-
-        if (response == null) {
-            System.out.println("No quorum achieved when getting rid value!");
-        }
-        else if (response.getMessage().equals("valid")) {
-            this.rid = response.getRid();
-            System.out.println("OBTAINED RID " + this.rid);
-        } else {
-            System.out.println(response.getMessage());
-        }
-    }
-
-    public boolean openAccount(PublicKey publicKey, String username, PrivateKey privateKey) {
-
-        String pairSignatureString = String.valueOf(this.balance) + 0;
-        byte [] pairSignature = crypto.getSignature(pairSignatureString, privateKey);
-
-        String finalString1 = publicKey.toString() + username + 0 + this.balance + Arrays.toString(pairSignature);
-        byte[] signature = crypto.getSignature(finalString1, privateKey);
-
-        OpenAccountRequest request = OpenAccountRequest.newBuilder()
-                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
-                .setUsername(username)
-                .setWid(0)
-                .setBalance(this.balance)
-                .setPairSign(ByteString.copyFrom(pairSignature))
-                .setSignature(ByteString.copyFrom(signature))
-                .build();
-
-        OpenAccountResponse response = frontend.openAccount(request);
-
-        if (response == null) {
-            System.out.println("No quorum achieved!");
-            return false;
-        } else if (response.getMessage().equals("valid")) {
-            System.out.println("\nAccount created successfully with username: " + username + "\n");
-            return true;
-        } else {
-            System.out.println(response.getMessage());
-            return false;
-        }
-    }
 
     public CheckAccountResponse checkAccount(PublicKey publicKey, KeyPair keyPair){
 
@@ -99,7 +45,7 @@ public class App {
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
-        CheckAccountResponse response = frontend.checkAccount(request);
+        CheckAccountResponse response = frontend.checkAccountManIntheMiddle(request);
 
         if (response == null) {
             System.out.println("No quorum achieved!");
@@ -121,35 +67,7 @@ public class App {
                 }
                 System.out.println();
             }
-
-            try {
-
-                byte[] pairSign = response.getPairSign().toByteArray();
-                PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
-
-                String writeBackString = String.valueOf(response.getBalance()) + pending + response.getWid() + Arrays.toString(pairSign)
-                        + publicKey1.toString() + keyPair.getPublic().toString();
-
-                byte[] writeBackSignature = crypto.getSignature(writeBackString, keyPair.getPrivate());
-
-                CheckWriteBackRequest request1 = CheckWriteBackRequest.newBuilder()
-                        .addAllTransactions(pending)
-                        .setBalance(response.getBalance())
-                        .setWid(response.getWid())
-                        .setPairSign(ByteString.copyFrom(pairSign))
-                        .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
-                        .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                        .setSignature(ByteString.copyFrom(writeBackSignature))
-                        .build();
-
-                frontend.checkWriteBack(request1);
-
-                return response;
-
-            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-                System.out.println("Something wrong with the algorithm!");
-                return response;
-            }
+            return response;
 
         } else {
             System.out.println(response.getMessage());
@@ -157,7 +75,101 @@ public class App {
         }
     }
 
-    public SendAmountResponse sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername) {
+    public CheckAccountResponse checkAccount2(PublicKey publicKey, KeyPair keyPair){
+
+        int nonce = crypto.getSecureRandom();
+
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + new_rid + nonce;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        CheckAccountRequest request = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setRid(this.rid + 1)
+                .setNonce(nonce)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+
+        CheckAccountResponse response = frontend.checkAccountOneByzantine(request);
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+            return response;
+        }
+        else if (response.getMessage().equals("valid")) {
+
+            this.rid++;
+            List<Transaction> pending = response.getTransactionsList();
+
+            if (pending.isEmpty()) {
+                System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nNo pending transactions.\n");
+            } else {
+                System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nPending Transactions:");
+                int i = 1;
+                for (Transaction transaction : pending) {
+                    System.out.println(i + ") " + transaction.getAmount() + " from " + transaction.getSourceUsername());
+                    i++;
+                }
+                System.out.println();
+            }
+            return response;
+
+        } else {
+            System.out.println(response.getMessage());
+            return response;
+        }
+    }
+
+    public CheckAccountResponse checkAccount3(PublicKey publicKey, KeyPair keyPair){
+
+        int nonce = crypto.getSecureRandom();
+
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + new_rid + nonce;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        CheckAccountRequest request = CheckAccountRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setRid(this.rid + 1)
+                .setNonce(nonce)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+
+        CheckAccountResponse response = frontend.checkAccountTwoByzantine(request);
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+            return response;
+        }
+        else if (response.getMessage().equals("valid")) {
+
+            this.rid++;
+            List<Transaction> pending = response.getTransactionsList();
+
+            if (pending.isEmpty()) {
+                System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nNo pending transactions.\n");
+            } else {
+                System.out.println("\nAvailable Balance: " + response.getBalance() + "\n\nPending Transactions:");
+                int i = 1;
+                for (Transaction transaction : pending) {
+                    System.out.println(i + ") " + transaction.getAmount() + " from " + transaction.getSourceUsername());
+                    i++;
+                }
+                System.out.println();
+            }
+            return response;
+
+        } else {
+            System.out.println(response.getMessage());
+            return response;
+        }
+    }
+
+    /*public SendAmountResponse sendAmount(PublicKey senderPubK, PublicKey receiverPubK, int amount, PrivateKey senderPrivK, String sourceUsername, String destUsername) {
 
         int nonce = crypto.getSecureRandom();
 
@@ -318,7 +330,7 @@ public class App {
             System.out.println(response1.getMessage());
             return null;
         }
-    }
+    }*/
 
     public AuditResponse audit(PublicKey publicKey, KeyPair keyPair, String username){
 
@@ -337,7 +349,7 @@ public class App {
                 .setSignature(ByteString.copyFrom(signature))
                 .build();
 
-        AuditResponse response = frontend.audit(request);
+        AuditResponse response = frontend.auditManIntheMiddle(request);
 
         if (response == null) {
             System.out.println("No quorum achieved!");
@@ -346,27 +358,105 @@ public class App {
             this.rid++;
             List<Transaction> history = response.getTransactionsList();
 
-            try {
+            if (history.isEmpty()) {
+                System.out.println("\nNo history to be shown.\n");
+            } else {
 
-                PublicKey publicKey1 = crypto.getPubKeyGrpc(request.getPublicKey().toByteArray());
+                System.out.println("\nHistory:\n");
 
-                String auditBackString = history + publicKey1.toString() + keyPair.getPublic().toString();
-
-                byte[] writeBackSignature = crypto.getSignature(auditBackString, keyPair.getPrivate());
-
-                AuditWriteBackRequest request1 = AuditWriteBackRequest.newBuilder()
-                        .addAllTransactions(history)
-                        .setPublicKey(ByteString.copyFrom(publicKey1.getEncoded()))
-                        .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
-                        .setSignature(ByteString.copyFrom(writeBackSignature))
-                        .build();
-
-                frontend.auditWriteBack(request1);
-
-            } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-                System.out.println("Something wrong with the algorithm!");
-                return null;
+                for (Transaction transaction : history) {
+                    if (transaction.getSourceUsername().equals(username)) {
+                        System.out.println(transaction.getAmount() + " to " + transaction.getDestUsername());
+                    } else {
+                        System.out.println(transaction.getAmount() + " from " + transaction.getSourceUsername());
+                    }
+                }
+                System.out.println();
             }
+
+            return response;
+
+        } else {
+            System.out.println(response.getMessage());
+            return response;
+        }
+    }
+
+    public AuditResponse auditOneByzantine(PublicKey publicKey, KeyPair keyPair, String username){
+
+        int random = crypto.getSecureRandom();
+
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + random + new_rid;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        AuditRequest request = AuditRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setNonce(random)
+                .setRid(this.rid + 1)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+
+        AuditResponse response = frontend.auditOneByzantine(request);
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+            return null;
+        } else if (response.getMessage().equals("valid")) {
+            this.rid++;
+            List<Transaction> history = response.getTransactionsList();
+
+            if (history.isEmpty()) {
+                System.out.println("\nNo history to be shown.\n");
+            } else {
+
+                System.out.println("\nHistory:\n");
+
+                for (Transaction transaction : history) {
+                    if (transaction.getSourceUsername().equals(username)) {
+                        System.out.println(transaction.getAmount() + " to " + transaction.getDestUsername());
+                    } else {
+                        System.out.println(transaction.getAmount() + " from " + transaction.getSourceUsername());
+                    }
+                }
+                System.out.println();
+            }
+
+            return response;
+
+        } else {
+            System.out.println(response.getMessage());
+            return response;
+        }
+    }
+
+    public AuditResponse auditTwoByzantine(PublicKey publicKey, KeyPair keyPair, String username){
+
+        int random = crypto.getSecureRandom();
+
+        int new_rid = this.rid + 1;
+
+        String finalString = publicKey.toString() + keyPair.getPublic().toString() + random + new_rid;
+        byte [] signature = crypto.getSignature(finalString, keyPair.getPrivate());
+
+        AuditRequest request = AuditRequest.newBuilder()
+                .setPublicKey(ByteString.copyFrom(publicKey.getEncoded()))
+                .setMyPublicKey(ByteString.copyFrom(keyPair.getPublic().getEncoded()))
+                .setNonce(random)
+                .setRid(this.rid + 1)
+                .setSignature(ByteString.copyFrom(signature))
+                .build();
+
+        AuditResponse response = frontend.auditTwoByzantine(request);
+
+        if (response == null) {
+            System.out.println("No quorum achieved!");
+            return null;
+        } else if (response.getMessage().equals("valid")) {
+            this.rid++;
+            List<Transaction> history = response.getTransactionsList();
 
             if (history.isEmpty()) {
                 System.out.println("\nNo history to be shown.\n");

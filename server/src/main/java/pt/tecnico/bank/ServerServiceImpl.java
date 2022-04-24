@@ -367,7 +367,6 @@ public class ServerServiceImpl extends ServerServiceGrpc.ServerServiceImplBase {
 
                         client.setWid(wid);
                         client.setPairSign(pairSign);
-                        wid++;
 
                         saveHandler.saveState();
                     }

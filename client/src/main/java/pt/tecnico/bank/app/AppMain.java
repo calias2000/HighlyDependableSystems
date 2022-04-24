@@ -19,7 +19,9 @@ public class AppMain {
 
 		// Initialization of the server frontend and App object
 		Crypto crypto = new Crypto();
-		ServerFrontend frontend = new ServerFrontend(1, crypto);
+
+		int byzantine = Integer.parseInt(args[0]);
+		ServerFrontend frontend = new ServerFrontend(byzantine, crypto);
 		App app = new App(frontend, crypto);
 
 		Scanner scanner = new Scanner(System.in);

@@ -15,6 +15,7 @@
 	<!-- Properties are variables used to customize the behavior of Maven and its plug-ins. -->
 	<properties>
 		<mainclass>pt.tecnico.bank.app.AppMain</mainclass>
+		<byzantine>1</byzantine>
 	</properties>
 
 	<!-- Dependencies are code archives - JARs - on which your current module needs in order to compile, build, test, and/or to run. 
@@ -96,6 +97,9 @@
 				</executions>
 				<configuration>
 					<mainClass>${mainclass}</mainClass>
+					<arguments>
+						<argument>${byzantine}</argument>
+					</arguments>
 				</configuration>
 			</plugin>
 		</plugins>

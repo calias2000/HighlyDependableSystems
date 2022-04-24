@@ -17,7 +17,6 @@ public class ServerMain implements Serializable{
 	static HashMap<PublicKey,Client> clientList = new HashMap<>();
 	static KeyPair keyPair = null;
 	static SaveHandler saveHandler;
-	static HashMap<String, Integer> nonces = null;
 	static Crypto crypto = null;
 	static int byzantine;
 	static int port;
@@ -40,7 +39,7 @@ public class ServerMain implements Serializable{
 		} else {
 			System.out.println("Creating server KeyStore...");
 			generateStore(serverName);
-			Thread.sleep(2000);
+			Thread.sleep(3000);
 			keyPair = getKeyPair(serverName);
 			if (keyPair == null) {
 				return;

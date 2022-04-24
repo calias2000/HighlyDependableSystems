@@ -7,7 +7,7 @@ Group 26 - Bernardo Quinteiro 93692, Diogo Lopes 93700, Gonçalo Mateus 93713
 ### 1.1. Compile the project
 
 First, we need to compile and install all the modules and respective dependencies.
-To do it, just go to the *HighReliabilitySystems* directory and run the following command:
+To do it, just go to the *HighlyDependableSystems* directory and run the following command:
 
 ```sh
 $ mvn clean install -DskipTests
@@ -15,27 +15,31 @@ $ mvn clean install -DskipTests
 
 ### 1.2. Start the *server*
 
-Next, we need to start the server.
-To do it, just go to the *server* directory and run the following command:
+Next, we need to start the servers.
+To do it, just go to the *server* directory and run the following command with the desired byzantine servers:
 
 ```sh
-$ mvn exec:java 
+$ startServers.bat 1
 ```
+
+This will initialize 3*1+1=4 servers.
 
 ##### 1.2.1 Run *server* tests
 To run the server tests go to the *server-tester* directory and run the command:
+
 ```sh
 $ mvn verify 
 ```
-
+(This will run the tests for 1 byzantine fault, so 4 running servers)
 
 ### 1.3. Start the *Client*
 
-To start the *app* we need to go inside the *client* directory and run the following command:
+To start the *app* we need to go inside the *client* directory and run the following command according to the before selected byzantine servers:
 
  ```sh
-$ mvn exec:java 
+$ startClient.bat 1
 ```
+
 
 
 ## 2. Commands Test
