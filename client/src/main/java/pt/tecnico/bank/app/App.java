@@ -45,7 +45,6 @@ public class App {
         }
         else if (response.getMessage().equals("valid")) {
             this.rid = response.getRid();
-            System.out.println("OBTAINED RID " + this.rid);
         } else {
             System.out.println(response.getMessage());
         }
