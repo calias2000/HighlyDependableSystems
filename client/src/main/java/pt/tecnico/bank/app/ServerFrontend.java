@@ -48,7 +48,7 @@ public class ServerFrontend implements AutoCloseable {
     public void proof() {
 
         RespCollector collector = new RespCollector();
-        CountDownLatch finishLatch = new CountDownLatch(this.numberChannels);
+        CountDownLatch finishLatch = new CountDownLatch(quorum);
 
         int nonce = crypto.getSecureRandom();
 
@@ -208,30 +208,32 @@ public class ServerFrontend implements AutoCloseable {
 
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
 
-            byte [] challenge = proofs.get(port);
-            byte [] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
-            long pow = crypto.generateProofOfWork(concatenated);
+            try {
+                byte[] challenge = proofs.get(port);
+                byte[] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
+                long pow = crypto.generateProofOfWork(concatenated);
 
-            CheckAccountRequest checkRequest = CheckAccountRequest.newBuilder()
-                    .setPublicKey(request.getPublicKey())
-                    .setMyPublicKey(request.getMyPublicKey())
-                    .setRid(request.getRid())
-                    .setNonce(request.getNonce())
-                    .setPow(pow)
-                    .setConcatenated(ByteString.copyFrom(concatenated))
-                    .setSignature(request.getSignature())
-                    .build();
+                CheckAccountRequest checkRequest = CheckAccountRequest.newBuilder()
+                        .setPublicKey(request.getPublicKey())
+                        .setMyPublicKey(request.getMyPublicKey())
+                        .setRid(request.getRid())
+                        .setNonce(request.getNonce())
+                        .setPow(pow)
+                        .setConcatenated(ByteString.copyFrom(concatenated))
+                        .setSignature(request.getSignature())
+                        .build();
 
-            while (true) {
-                try {
-                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(checkRequest, new Observer<>(collector, finishLatch));
-                    break;
-                } catch (StatusRuntimeException e) {
-                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
-                        System.out.println("Stub error");
+                while (true) {
+                    try {
+                        stub.withDeadlineAfter(3, TimeUnit.SECONDS).checkAccount(checkRequest, new Observer<>(collector, finishLatch));
+                        break;
+                    } catch (StatusRuntimeException e) {
+                        if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()) {
+                            System.out.println("Stub error");
+                        }
                     }
                 }
-            }
+            } catch (NullPointerException ignored) { }
             port++;
         }
 
