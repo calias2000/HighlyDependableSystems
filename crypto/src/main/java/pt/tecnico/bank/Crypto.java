@@ -118,7 +118,6 @@ public class Crypto {
             dsaForVerify.update(finalString.getBytes());
             return dsaForVerify.verify(signature);
         } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e){
-            System.out.println("Signatures don't match.");
             return false;
         }
     }

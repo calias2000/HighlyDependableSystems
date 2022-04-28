@@ -442,29 +442,31 @@ public class ServerFrontend implements AutoCloseable {
 
         for (ServerServiceGrpc.ServerServiceStub stub : this.stubs) {
 
-            byte [] challenge = proofs.get(port);
-            byte [] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
-            long pow = crypto.generateProofOfWork(concatenated);
+            try {
+                byte[] challenge = proofs.get(port);
+                byte[] concatenated = Bytes.concat(challenge, request.getMyPublicKey().toByteArray());
+                long pow = crypto.generateProofOfWork(concatenated);
 
-            AuditRequest auditRequest = AuditRequest.newBuilder()
-                    .setPublicKey(request.getPublicKey())
-                    .setMyPublicKey(request.getMyPublicKey())
-                    .setNonce(request.getNonce())
-                    .setRid(request.getRid())
-                    .setPow(pow)
-                    .setConcatenated(ByteString.copyFrom(concatenated))
-                    .setSignature(request.getSignature())
-                    .build();
-            while (true) {
-                try {
-                    stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));
-                    break;
-                } catch (StatusRuntimeException e) {
-                    if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()){
-                        System.out.println("Stub error");
+                AuditRequest auditRequest = AuditRequest.newBuilder()
+                        .setPublicKey(request.getPublicKey())
+                        .setMyPublicKey(request.getMyPublicKey())
+                        .setNonce(request.getNonce())
+                        .setRid(request.getRid())
+                        .setPow(pow)
+                        .setConcatenated(ByteString.copyFrom(concatenated))
+                        .setSignature(request.getSignature())
+                        .build();
+                while (true) {
+                    try {
+                        stub.withDeadlineAfter(3, TimeUnit.SECONDS).audit(auditRequest, new Observer<>(collector, finishLatch));
+                        break;
+                    } catch (StatusRuntimeException e) {
+                        if (e.getStatus().getCode() == Status.DEADLINE_EXCEEDED.getCode()) {
+                            System.out.println("Stub error");
+                        }
                     }
                 }
-            }
+            } catch (NullPointerException ignored) {}
             port++;
         }
 
