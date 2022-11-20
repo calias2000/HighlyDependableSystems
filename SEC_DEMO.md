@@ -149,14 +149,3 @@ History:
 ### 2.9. *Logout*
 
 This command logs out from the current account and returns to the Open/Load menu.
-
-
-
-
-
-
-
-
-
-
-
